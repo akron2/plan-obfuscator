@@ -16,6 +16,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--port", type=int, default=8765, help="Local HTTP port")
     parser.add_argument("--no-browser", action="store_true", help="Do not open a browser")
     parser.add_argument("--data-dir", type=Path, help="Directory for the SQLite database")
+    parser.add_argument(
+        "--proxy",
+        help=(
+            "Proxy URL used by run.bat/run.ps1 only when runtime dependencies "
+            "must be installed"
+        ),
+    )
     return parser
 
 
