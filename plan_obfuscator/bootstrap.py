@@ -31,6 +31,59 @@ RUNTIME_REQUIREMENTS = (
 )
 
 
+def project_venv_python(
+    project_root: Path = PROJECT_ROOT,
+    platform_name: str | None = None,
+) -> Path:
+    if (platform_name or os.name) == "nt":
+        return project_root / ".venv" / "Scripts" / "python.exe"
+    return project_root / ".venv" / "bin" / "python"
+
+
+def is_project_venv(
+    python_executable: Path | None = None,
+    project_root: Path = PROJECT_ROOT,
+    platform_name: str | None = None,
+) -> bool:
+    current = (python_executable or Path(sys.executable)).resolve()
+    expected = project_venv_python(project_root, platform_name).resolve()
+    return os.path.normcase(str(current)) == os.path.normcase(str(expected))
+
+
+def run_in_project_venv(
+    arguments: Sequence[str],
+    *,
+    project_root: Path = PROJECT_ROOT,
+    python_executable: Path | None = None,
+    platform_name: str | None = None,
+    runner: Callable[..., subprocess.CompletedProcess[str]] = subprocess.run,
+) -> int | None:
+    if is_project_venv(python_executable, project_root, platform_name):
+        return None
+
+    base_python = str(python_executable or Path(sys.executable))
+    venv_dir = project_root / ".venv"
+    venv_python = project_venv_python(project_root, platform_name)
+    if not venv_python.is_file():
+        print(f"Creating virtual environment: {venv_dir}", flush=True)
+        runner(
+            [base_python, "-m", "venv", str(venv_dir)],
+            cwd=project_root,
+            check=True,
+            text=True,
+        )
+    if not venv_python.is_file():
+        raise RuntimeError(f"Virtual environment was not created correctly: {venv_python}")
+
+    completed = runner(
+        [str(venv_python), "-m", "plan_obfuscator.bootstrap", *arguments],
+        cwd=project_root,
+        check=False,
+        text=True,
+    )
+    return completed.returncode
+
+
 def numeric_version(value: str) -> tuple[int, ...]:
     """Return the stable numeric prefix of a PEP 440-style version."""
 
@@ -88,12 +141,12 @@ def ensure_dependencies(
 ) -> bool:
     issues = issue_reader()
     if not issues:
-        print("Runtime dependencies are already installed; skipping pip.")
+        print("Runtime dependencies are already installed; skipping pip.", flush=True)
         return False
 
-    print("Installing missing or incompatible runtime dependencies:")
+    print("Installing missing or incompatible runtime dependencies:", flush=True)
     for issue in issues:
-        print(f"  - {issue}")
+        print(f"  - {issue}", flush=True)
 
     command = [sys.executable, "-m", "pip", "install", "-e", str(PROJECT_ROOT)]
     if proxy:
@@ -116,19 +169,25 @@ def main() -> int:
         return 2
 
     try:
+        delegated_exit_code = run_in_project_venv(sys.argv[1:])
+        if delegated_exit_code is not None:
+            return delegated_exit_code
         proxy = extract_proxy(sys.argv[1:])
         ensure_dependencies(proxy)
-    except (ValueError, RuntimeError, subprocess.CalledProcessError) as error:
+    except KeyboardInterrupt:
+        return 130
+    except (OSError, ValueError, RuntimeError, subprocess.CalledProcessError) as error:
         print(f"Bootstrap failed: {error}", file=sys.stderr)
         return 1
 
     os.chdir(PROJECT_ROOT)
     from plan_obfuscator.cli import main as application_main
 
+    if os.name == "nt":
+        sys.argv[0] = "run.bat"
     application_main()
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
