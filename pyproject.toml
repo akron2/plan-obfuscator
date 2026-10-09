@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plan-obfuscator"
+version = "0.1.0"
+description = "Local reversible obfuscation for Oracle execution plans and SQL Monitor reports"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "alembic>=1.14,<2",
+    "fastapi>=0.115,<1",
+    "jinja2>=3.1,<4",
+    "python-multipart>=0.0.18,<1",
+    "sqlalchemy>=2.0,<3",
+    "sqlglot>=26,<31",
+    "uvicorn>=0.32,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28,<1",
+    "pytest>=8.3,<10",
+    "pytest-cov>=6,<8",
+    "ruff>=0.9,<1",
+]
+build = [
+    "pyinstaller>=6.11,<7",
+]
+
+[project.scripts]
+plan-obfuscator = "plan_obfuscator.cli:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["plan_obfuscator*"]
+
+[tool.setuptools.package-data]
+plan_obfuscator = [
+    "templates/*.html",
+    "static/*.css",
+    "static/*.js",
+    "migrations/script.py.mako",
+    "migrations/versions/*.py",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]

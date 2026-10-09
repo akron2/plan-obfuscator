@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}{{ case.title }} · Plan Obfuscator{% endblock %}
+{% block content %}
+<nav class="breadcrumbs"><a href="/">Кейсы</a><span>/</span><span>{{ case.title }}</span></nav>
+
+<header class="case-header">
+  <div>
+    <p class="eyebrow">Кейс · Oracle {{ case.oracle_version }}</p>
+    <h1>{{ case.title }}</h1>
+    <p class="muted">{{ case.description or "Без описания" }}</p>
+  </div>
+  <div class="case-actions">
+    <span class="badge">{{ case.token_prefix }}</span>
+    <form method="post" action="/cases/{{ case.id }}/delete" data-confirm="Удалить кейс и всю историю?">
+      <button type="submit" class="danger ghost">Удалить</button>
+    </form>
+  </div>
+</header>
+
+<section class="grid case-grid">
+  <article class="panel">
+    <div class="section-heading">
+      <div><p class="step">01</p><h2>Источники</h2></div>
+      <span class="counter">{{ case.artifacts|length }}</span>
+    </div>
+    <form method="post" action="/cases/{{ case.id }}/artifacts" enctype="multipart/form-data" class="stack">
+      <label>Название
+        <input name="display_name" placeholder="Определится автоматически">
+      </label>
+      <label>Вставьте SQL или отчёт
+        <textarea name="text" rows="11" placeholder="SQL, DBMS_XPLAN, SQL Monitor TEXT, outline или predicates"></textarea>
+      </label>
+      <div class="or"><span>или</span></div>
+      <label class="file-input">Загрузить .txt
+        <input type="file" name="upload" accept=".txt,.sql,.log,text/plain">
+      </label>
+      <button type="submit" class="primary">Добавить источник</button>
+    </form>
+
+    <div class="artifact-list">
+      {% for artifact in case.artifacts %}
+      {% set current = artifact.revisions|selectattr('id', 'equalto', artifact.current_revision_id)|first or artifact.revisions[-1] %}
+      <details class="artifact-card">
+        <summary>
+          <span class="type-chip">{{ artifact.detected_type }}</span>
+          <strong>{{ artifact.display_name }}</strong>
+          <span>v{{ current.version }}</span>
+        </summary>
+        <div class="artifact-body">
+          <form method="post" action="/artifacts/{{ artifact.id }}/revisions" class="stack">
+            <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
+            <div class="row-actions">
+              <button type="submit">Сохранить новой ревизией</button>
+            </div>
+          </form>
+          <form method="post" action="/artifacts/{{ artifact.id }}/delete" data-confirm="Удалить источник и его ревизии?">
+            <button type="submit" class="danger ghost small">Удалить источник</button>
+          </form>
+        </div>
+      </details>
+      {% else %}
+      <div class="empty compact">Добавьте хотя бы один источник.</div>
+      {% endfor %}
+    </div>
+  </article>
+
+  <article class="panel">
+    <div class="section-heading">
+      <div><p class="step">02</p><h2>Обфускация</h2></div>
+      <span class="counter">{{ case.runs|length }}</span>
+    </div>
+    <form method="post" action="/cases/{{ case.id }}/runs" class="stack">
+      <label>Вопрос к модели
+        <textarea name="question" rows="5" placeholder="Проанализируй план и предложи причины проблемы..."></textarea>
+      </label>
+      <button type="submit" class="primary" {% if not case.artifacts %}disabled{% endif %}>Сформировать prompt</button>
+    </form>
+
+    <div class="run-list">
+      {% for run in case.runs %}
+      <details class="run-card" {% if loop.first %}open{% endif %}>
+        <summary>
+          <strong>{{ run.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</strong>
+          <span class="status {{ run.validation_status }}">{{ run.validation_status }}</span>
+          <span>{{ run.run_artifacts|length }} источников</span>
+        </summary>
+        <div class="run-body">
+          {% if run.findings %}
+          <div class="findings">
+            {% for finding in run.findings %}
+            <div class="finding {{ finding.severity }}"><code>{{ finding.code }}</code> {{ finding.message }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+          <div class="textarea-toolbar">
+            <span>Prompt-пакет</span>
+            <button type="button" data-copy-target="prompt-{{ run.id }}">Копировать</button>
+          </div>
+          <textarea id="prompt-{{ run.id }}" rows="18" readonly spellcheck="false">{{ run.prompt_text }}</textarea>
+
+          <hr>
+          <h3>Вставить ответ ИИ</h3>
+          <form method="post" action="/runs/{{ run.id }}/responses" class="stack">
+            <input name="model_label" placeholder="Модель, например ChatGPT">
+            <textarea name="text" rows="10" required placeholder="Ответ с OBF_* маркерами"></textarea>
+            <button type="submit">Восстановить и сохранить</button>
+          </form>
+
+          {% for response in run.responses %}
+          <article class="response-card">
+            <div class="response-head">
+              <strong>{{ response.model_label or "Ответ ИИ" }}</strong>
+              <time>{{ response.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</time>
+            </div>
+            {% if response.unknown_markers %}
+            <div class="finding warning">Неизвестные маркеры: {{ response.unknown_markers|join(', ') }}</div>
+            {% endif %}
+            <div class="textarea-toolbar">
+              <span>Восстановленный ответ</span>
+              <button type="button" data-copy-target="response-{{ response.id }}">Копировать</button>
+            </div>
+            <textarea id="response-{{ response.id }}" rows="12" readonly>{{ response.restored_text }}</textarea>
+            <details>
+              <summary>Сырой ответ</summary>
+              <textarea rows="8" readonly>{{ response.raw_text }}</textarea>
+            </details>
+          </article>
+          {% endfor %}
+        </div>
+      </details>
+      {% else %}
+      <div class="empty compact">История запусков пока пуста.</div>
+      {% endfor %}
+    </div>
+  </article>
+</section>
+{% endblock %}
+

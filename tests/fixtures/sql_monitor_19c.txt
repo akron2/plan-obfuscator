@@ -1,0 +1,53 @@
+SQL Monitoring Report
+
+SQL Text
+------------------------------
+SELECT /*+ MONITOR GATHER_PLAN_STATISTICS */
+       o.order_id,
+       c.customer_name
+FROM sales.orders o
+JOIN crm.customers c ON c.customer_id = o.customer_id
+WHERE o.status = 'OPEN'
+  AND o.created_at >= DATE '2026-01-01'
+  AND o.amount > 1000
+  AND c.region_code = :region
+
+Global Information
+------------------------------
+ Status              :  DONE (ALL ROWS)
+ Instance ID         :  1
+ Session             :  REPORT_USER (52:61539)
+ SQL ID              :  7ab12cd34ef56
+ SQL Execution ID    :  16777216
+ Execution Started   :  10/09/2026 10:33:07
+ First Refresh Time  :  10/09/2026 10:33:07
+ Last Refresh Time   :  10/09/2026 10:33:19
+ Duration            :  12s
+ Module/Action       :  report-worker@prod-db-01/monthly-close
+ Service             :  sales_prod
+ Program             :  python@prod-app-01 (TNS V1-V3)
+ Fetch Calls         :  4
+
+Global Stats
+===================================================================================================
+| Elapsed |   Cpu   |   IO    | Application | Fetch | Buffer | Read | Read  |
+| Time(s) | Time(s) | Waits(s)|  Waits(s)   | Calls |  Gets  | Reqs | Bytes |
+===================================================================================================
+|   12.01 |    3.42 |    8.18 |        0.00 |     4 |  98765 |  512 |  10GB |
+===================================================================================================
+
+SQL Plan Monitoring Details (Plan Hash Value=3829104756)
+====================================================================================================================
+| Id | Operation                            | Name             | Rows (Estim) | Cost | Time Active(s) | Rows (Actual) |
+====================================================================================================================
+|  0 | SELECT STATEMENT                     |                  |              |  842 |             12 |          1250 |
+|  1 |  HASH JOIN                           |                  |         1250 |  842 |             12 |          1250 |
+|  2 |   TABLE ACCESS BY INDEX ROWID BATCHED| ORDERS           |         1250 |  415 |              6 |          1250 |
+|  3 |    INDEX RANGE SCAN                  | IX_ORDERS_STATUS |         4096 |   32 |              1 |          4096 |
+|  4 |   TABLE ACCESS FULL                  | CUSTOMERS        |        50000 |  426 |              6 |         50000 |
+====================================================================================================================
+
+Bind Variables
+------------------------------
+ :REGION (VARCHAR2) = 'SIBERIA'
+
