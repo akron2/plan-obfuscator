@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -65,6 +66,7 @@ class Artifact(Base):
     detected_type: Mapped[str] = mapped_column(String(32), nullable=False)
     display_name: Mapped[str] = mapped_column(String(240), nullable=False)
     current_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
@@ -76,7 +78,6 @@ class Artifact(Base):
         cascade="all, delete-orphan",
         order_by="ArtifactRevision.version",
     )
-
 
 class ArtifactRevision(Base):
     __tablename__ = "artifact_revisions"

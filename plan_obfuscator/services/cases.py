@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Artifact, ArtifactRevision, Case
+from ..models import Artifact, ArtifactRevision, Case, ObfuscationRun, utc_now
 from ..parsing import ArtifactKind, detect_artifact_kind, parse_artifact
 from ..parsing.utils import sql_fingerprint, sql_is_compatible
 from .tokens import generate_case_prefix
@@ -48,7 +49,7 @@ class CaseService:
                 select(Case)
                 .options(
                     selectinload(Case.artifacts).selectinload(Artifact.revisions),
-                    selectinload(Case.runs),
+                    selectinload(Case.runs).selectinload(ObfuscationRun.responses),
                 )
                 .order_by(Case.updated_at.desc())
             )
@@ -67,6 +68,19 @@ class CaseService:
         )
         if case is None:
             raise CaseNotFoundError(case_id)
+        return case
+
+    def rename_case(self, case_id: str, title: str) -> Case:
+        clean_title = re.sub(r"\s+", " ", title).strip()
+        if not clean_title:
+            raise ValueError("Название кейса не может быть пустым.")
+        if len(clean_title) > 200:
+            raise ValueError("Название кейса не должно превышать 200 символов.")
+        case = self.get_case(case_id)
+        case.title = clean_title
+        case.updated_at = utc_now()
+        self.session.commit()
+        self.session.refresh(case)
         return case
 
     def _validate_sql(self, case: Case, text: str, kind: ArtifactKind) -> dict[str, object]:
@@ -126,6 +140,7 @@ class CaseService:
         self.session.add(revision)
         self.session.flush()
         artifact.current_revision_id = revision.id
+        case.updated_at = utc_now()
         self.session.commit()
         self.session.refresh(artifact)
         self.session.refresh(revision)
@@ -158,6 +173,7 @@ class CaseService:
         self.session.add(revision)
         self.session.flush()
         artifact.current_revision_id = revision.id
+        artifact.case.updated_at = utc_now()
         self.session.commit()
         self.session.refresh(revision)
         return revision

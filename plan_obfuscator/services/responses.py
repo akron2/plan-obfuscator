@@ -5,7 +5,7 @@ import re
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from ..models import Case, Finding, ObfuscationRun, Response
+from ..models import Case, Finding, ObfuscationRun, Response, utc_now
 
 
 class ResponseService:
@@ -69,6 +69,8 @@ class ResponseService:
         )
         self.session.add(response)
         self.session.flush()
+        run = self._load_run(run_id)
+        run.case.updated_at = utc_now()
         if unknown:
             self.session.add(
                 Finding(

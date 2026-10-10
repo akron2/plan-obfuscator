@@ -1,138 +1,279 @@
 {% extends "base.html" %}
-{% block title %}{{ case.title }} · Plan Obfuscator{% endblock %}
+{% block title %}{{ (case.title ~ ' · ') if case else '' }}Plan Obfuscator{% endblock %}
 {% block content %}
-<nav class="breadcrumbs"><a href="/">Кейсы</a><span>/</span><span>{{ case.title }}</span></nav>
-
-<header class="case-header">
-  <div>
-    <p class="eyebrow">Кейс · Oracle {{ case.oracle_version }}</p>
-    <h1>{{ case.title }}</h1>
-    <p class="muted">{{ case.description or "Без описания" }}</p>
-  </div>
-  <div class="case-actions">
-    <span class="badge">{{ case.token_prefix }}</span>
-    <form method="post" action="/cases/{{ case.id }}/delete" data-confirm="Удалить кейс и всю историю?">
-      <button type="submit" class="danger ghost">Удалить</button>
-    </form>
-  </div>
-</header>
-
-<section class="grid case-grid">
-  <article class="panel">
-    <div class="section-heading">
-      <div><p class="step">01</p><h2>Источники</h2></div>
-      <span class="counter">{{ case.artifacts|length }}</span>
+<div class="app-layout" data-app-layout>
+  <aside class="case-sidebar" aria-label="Кейсы">
+    <div class="sidebar-brand">
+      <a href="/" aria-label="Plan Obfuscator">
+        <span class="brand-mark">P</span>
+        <span><strong>Plan Obfuscator</strong><small>Oracle 19c · local</small></span>
+      </a>
+      <button type="button" class="icon-button mobile-only" data-sidebar-close aria-label="Закрыть список кейсов">×</button>
     </div>
-    <form method="post" action="/cases/{{ case.id }}/artifacts" enctype="multipart/form-data" class="stack">
-      <label>Название
-        <input name="display_name" placeholder="Определится автоматически">
-      </label>
-      <label>Вставьте SQL или отчёт
-        <textarea name="text" rows="11" placeholder="SQL, DBMS_XPLAN, SQL Monitor TEXT, outline или predicates"></textarea>
-      </label>
-      <div class="or"><span>или</span></div>
-      <label class="file-input">Загрузить .txt
-        <input type="file" name="upload" accept=".txt,.sql,.log,text/plain">
-      </label>
-      <button type="submit" class="primary">Добавить источник</button>
+
+    <form method="post" action="/cases/quick">
+      <button class="new-case-button" type="submit"><span>＋</span> Новый кейс</button>
     </form>
 
-    <div class="artifact-list">
-      {% for artifact in case.artifacts %}
-      {% set current = artifact.revisions|selectattr('id', 'equalto', artifact.current_revision_id)|first or artifact.revisions[-1] %}
-      <details class="artifact-card">
-        <summary>
-          <span class="type-chip">{{ artifact.detected_type }}</span>
-          <strong>{{ artifact.display_name }}</strong>
-          <span>v{{ current.version }}</span>
-        </summary>
-        <div class="artifact-body">
-          <form method="post" action="/artifacts/{{ artifact.id }}/revisions" class="stack">
-            <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
-            <div class="row-actions">
-              <button type="submit">Сохранить новой ревизией</button>
-            </div>
-          </form>
-          <form method="post" action="/artifacts/{{ artifact.id }}/delete" data-confirm="Удалить источник и его ревизии?">
-            <button type="submit" class="danger ghost small">Удалить источник</button>
-          </form>
-        </div>
-      </details>
+    <label class="sidebar-search">
+      <span aria-hidden="true">⌕</span>
+      <input type="search" placeholder="Поиск кейсов" autocomplete="off" data-case-filter>
+    </label>
+
+    <nav class="sidebar-cases" data-case-list aria-label="История кейсов">
+      {% for item in sidebar_cases %}
+      <a
+        class="sidebar-case {% if case and item.case.id == case.id %}active{% endif %}"
+        href="/cases/{{ item.case.id }}"
+        data-case-title="{{ item.case.title|lower }}"
+        {% if case and item.case.id == case.id %}aria-current="page"{% endif %}
+      >
+        <span class="case-status-dot {{ item.state }}" aria-hidden="true"></span>
+        <span class="sidebar-case-copy">
+          <strong>{{ item.case.title }}</strong>
+          <small>{{ item.label }} · {{ item.case.updated_at.strftime('%d.%m %H:%M') }}</small>
+        </span>
+        {% if item.artifact_count %}<span class="sidebar-count">{{ item.artifact_count }}</span>{% endif %}
+      </a>
       {% else %}
-      <div class="empty compact">Добавьте хотя бы один источник.</div>
+      <div class="sidebar-empty">Кейсов пока нет</div>
       {% endfor %}
-    </div>
-  </article>
+    </nav>
 
-  <article class="panel">
-    <div class="section-heading">
-      <div><p class="step">02</p><h2>Обфускация</h2></div>
-      <span class="counter">{{ case.runs|length }}</span>
+    <div class="sidebar-footer">
+      <span class="local-indicator"><i></i> Данные остаются локально</span>
     </div>
-    <form method="post" action="/cases/{{ case.id }}/runs" class="stack">
-      <label>Вопрос к модели
-        <textarea name="question" rows="5" placeholder="Проанализируй план и предложи причины проблемы..."></textarea>
-      </label>
-      <button type="submit" class="primary" {% if not case.artifacts %}disabled{% endif %}>Сформировать prompt</button>
-    </form>
+  </aside>
+  <button class="sidebar-scrim" type="button" data-sidebar-close aria-label="Закрыть панель"></button>
 
-    <div class="run-list">
-      {% for run in case.runs %}
-      <details class="run-card" {% if loop.first %}open{% endif %}>
-        <summary>
-          <strong>{{ run.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</strong>
-          <span class="status {{ run.validation_status }}">{{ run.validation_status }}</span>
-          <span>{{ run.run_artifacts|length }} источников</span>
-        </summary>
-        <div class="run-body">
-          {% if run.findings %}
-          <div class="findings">
-            {% for finding in run.findings %}
-            <div class="finding {{ finding.severity }}"><code>{{ finding.code }}</code> {{ finding.message }}</div>
-            {% endfor %}
+  <main class="chat-workspace">
+    {% if case %}
+    <header class="chat-header">
+      <button type="button" class="icon-button mobile-only" data-sidebar-open aria-label="Открыть список кейсов">☰</button>
+      <div class="chat-title">
+        <h1>{{ case.title }}</h1>
+        <div class="chat-meta">
+          <span>Oracle {{ case.oracle_version }}</span>
+          <span>·</span>
+          <button type="button" class="context-link" data-scroll-context>
+            Контекст: {{ active_artifacts|length }}
+            {% if context_changed %}<i class="changed-dot" title="Контекст изменён"></i>{% endif %}
+          </button>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="history-switch" role="group" aria-label="Отображение истории">
+          <button type="button" data-history-mode-button="latest" aria-pressed="true">Последний цикл</button>
+          <button type="button" data-history-mode-button="all" aria-pressed="false">Вся история</button>
+        </div>
+        <details class="case-menu">
+          <summary class="icon-button" aria-label="Действия с кейсом">•••</summary>
+          <div class="case-menu-popover">
+            <form method="post" action="/cases/{{ case.id }}/rename" class="rename-form">
+              <label>Название<input name="title" value="{{ case.title }}" maxlength="200" required></label>
+              <button type="submit">Сохранить</button>
+            </form>
+            <form method="post" action="/cases/{{ case.id }}/delete" data-confirm="Удалить кейс и всю историю?">
+              <button type="submit" class="danger-button">Удалить кейс</button>
+            </form>
           </div>
+        </details>
+      </div>
+    </header>
+
+    <section class="conversation-scroll" data-conversation-scroll>
+      <div class="conversation" role="log" aria-label="История обработки" aria-live="polite">
+        {% if notice %}<div class="toast success" role="status">{{ notice }}</div>{% endif %}
+        {% if error %}<div class="toast error" role="alert">{{ error }}</div>{% endif %}
+
+        <article class="context-card" id="context" aria-labelledby="context-title">
+          <details>
+            <summary>
+              <span class="context-icon" aria-hidden="true">⌘</span>
+              <span class="context-summary-copy">
+                <strong id="context-title">Контекст кейса</strong>
+                <small>{% if active_artifacts %}{{ active_artifacts|length }} материалов{% else %}Материалы ещё не добавлены{% endif %}</small>
+              </span>
+              <span class="context-badges">
+                {% for artifact_type, count in artifact_counts.items() %}
+                <span class="artifact-badge {{ artifact_type }}">{{ artifact_labels.get(artifact_type, artifact_type) }}{% if count > 1 %} ×{{ count }}{% endif %}</span>
+                {% endfor %}
+                {% if context_changed %}<span class="context-state changed">Изменён</span>{% endif %}
+              </span>
+              <span class="disclosure-icon" aria-hidden="true">⌄</span>
+            </summary>
+            <div class="context-body">
+              {% if active_artifacts %}
+              <div class="context-artifacts">
+                {% for artifact in active_artifacts %}
+                {% set current = artifact.revisions|selectattr('id', 'equalto', artifact.current_revision_id)|first or artifact.revisions[-1] %}
+                <details class="artifact-item">
+                  <summary>
+                    <span class="artifact-badge {{ artifact.detected_type }}">{{ artifact_labels.get(artifact.detected_type, artifact.detected_type) }}</span>
+                    <strong>{{ artifact.display_name }}</strong>
+                    <small>v{{ current.version }} · {{ current.source_text|length }} символов</small>
+                    <span class="disclosure-icon" aria-hidden="true">⌄</span>
+                  </summary>
+                  <div class="artifact-editor">
+                    <form method="post" action="/artifacts/{{ artifact.id }}/revisions">
+                      <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
+                      <div class="artifact-actions">
+                        <span>{{ artifact.revisions|length }} ревизий</span>
+                        <button type="submit">Сохранить новой ревизией</button>
+                      </div>
+                    </form>
+                    <form method="post" action="/artifacts/{{ artifact.id }}/delete" data-confirm="Удалить материал и его ревизии?">
+                      <button type="submit" class="text-danger">Удалить материал</button>
+                    </form>
+                  </div>
+                </details>
+                {% endfor %}
+              </div>
+              {% else %}
+              <div class="context-empty">Вставьте SQL, DBMS_XPLAN или SQL Monitor в поле снизу.</div>
+              {% endif %}
+            </div>
+          </details>
+        </article>
+
+        {% if context_changed %}
+        <article class="system-event warning" role="article">
+          <span aria-hidden="true">△</span>
+          <div><strong>Контекст изменился</strong><p>Задайте вопрос, чтобы сформировать новый prompt. Предыдущий цикл сохранён.</p></div>
+        </article>
+        {% endif %}
+
+        {% for run in case.runs %}
+        <section
+          class="conversation-cycle {% if latest_run and run.id == latest_run.id %}is-latest{% endif %}"
+          data-conversation-cycle
+          {% if latest_run and run.id == latest_run.id %}id="latest-cycle"{% endif %}
+        >
+          {% if run.question %}
+          <article class="chat-item user-message" role="article" aria-label="Вопрос пользователя">
+            <div class="message-meta"><span>Вы</span><time>{{ run.created_at.strftime('%d.%m.%Y %H:%M') }}</time></div>
+            <div class="user-bubble">{{ run.question }}</div>
+          </article>
           {% endif %}
-          <div class="textarea-toolbar">
-            <span>Prompt-пакет</span>
-            <button type="button" data-copy-target="prompt-{{ run.id }}">Копировать</button>
-          </div>
-          <textarea id="prompt-{{ run.id }}" rows="18" readonly spellcheck="false">{{ run.prompt_text }}</textarea>
 
-          <hr>
-          <h3>Вставить ответ ИИ</h3>
-          <form method="post" action="/runs/{{ run.id }}/responses" class="stack">
-            <input name="model_label" placeholder="Модель, например ChatGPT">
-            <textarea name="text" rows="10" required placeholder="Ответ с OBF_* маркерами"></textarea>
-            <button type="submit">Восстановить и сохранить</button>
-          </form>
+          <article class="chat-item assistant-message prompt-message" role="article" aria-label="Сформированный prompt">
+            <div class="message-card">
+              <div class="message-card-header">
+                <div><span class="message-kicker">Plan Obfuscator</span><h2>Prompt готов</h2></div>
+                <span class="validation-status {{ run.validation_status }}">{{ run.validation_status }}</span>
+              </div>
+              <p class="message-description">{{ run.run_artifacts|length }} материалов · mapping сохранён в кейсе</p>
+              {% if run.findings %}
+              <div class="findings-list">
+                {% for finding in run.findings %}
+                <div class="finding-row {{ finding.severity }}"><code>{{ finding.code }}</code><span>{{ finding.message }}</span></div>
+                {% endfor %}
+              </div>
+              {% endif %}
+              <div class="primary-actions">
+                <button type="button" class="copy-primary" data-copy-target="prompt-copy-{{ run.id }}" data-prompt-copied>Копировать prompt</button>
+                <details class="inline-details">
+                  <summary>Развернуть</summary>
+                  <pre class="code-block">{{ run.prompt_text }}</pre>
+                </details>
+              </div>
+              <textarea id="prompt-copy-{{ run.id }}" class="visually-hidden" aria-hidden="true" tabindex="-1">{{ run.prompt_text }}</textarea>
+            </div>
+          </article>
 
           {% for response in run.responses %}
-          <article class="response-card">
-            <div class="response-head">
-              <strong>{{ response.model_label or "Ответ ИИ" }}</strong>
-              <time>{{ response.created_at.strftime('%d.%m.%Y %H:%M:%S') }}</time>
+          <article class="chat-item assistant-message response-message" role="article" aria-label="Восстановленный ответ">
+            <div class="message-card response-card">
+              <div class="message-card-header">
+                <div><span class="message-kicker">{{ response.model_label or "Ответ ИИ" }}</span><h2>Восстановленный ответ</h2></div>
+                <time>{{ response.created_at.strftime('%d.%m.%Y %H:%M') }}</time>
+              </div>
+              {% if response.unknown_markers %}<div class="unknown-warning">Не восстановлены: {{ response.unknown_markers|join(', ') }}</div>{% endif %}
+              <pre id="response-{{ response.id }}" class="restored-answer">{{ response.restored_text }}</pre>
+              <div class="secondary-actions">
+                <button type="button" data-copy-target="response-{{ response.id }}">Копировать ответ</button>
+                <details class="inline-details raw-response">
+                  <summary>Показать оригинал</summary>
+                  <pre class="code-block">{{ response.raw_text }}</pre>
+                </details>
+              </div>
             </div>
-            {% if response.unknown_markers %}
-            <div class="finding warning">Неизвестные маркеры: {{ response.unknown_markers|join(', ') }}</div>
-            {% endif %}
-            <div class="textarea-toolbar">
-              <span>Восстановленный ответ</span>
-              <button type="button" data-copy-target="response-{{ response.id }}">Копировать</button>
-            </div>
-            <textarea id="response-{{ response.id }}" rows="12" readonly>{{ response.restored_text }}</textarea>
-            <details>
-              <summary>Сырой ответ</summary>
-              <textarea rows="8" readonly>{{ response.raw_text }}</textarea>
-            </details>
           </article>
           {% endfor %}
-        </div>
-      </details>
-      {% else %}
-      <div class="empty compact">История запусков пока пуста.</div>
-      {% endfor %}
-    </div>
-  </article>
-</section>
-{% endblock %}
 
+          {% if not run.responses %}
+          <article class="system-event waiting" role="article">
+            <span aria-hidden="true">↳</span>
+            <div><strong>Ожидается ответ ИИ</strong><p>Скопируйте prompt, отправьте модели и вставьте ответ в поле снизу.</p></div>
+          </article>
+          {% endif %}
+        </section>
+        {% else %}
+        <article class="welcome-message" role="article">
+          <span class="welcome-icon" aria-hidden="true">◎</span>
+          <h2>Добавьте материалы</h2>
+          <p>Вставьте SQL, план выполнения, SQL Monitor, outline или predicates. Затем задайте вопрос обычным текстом.</p>
+        </article>
+        {% endfor %}
+        <div id="latest" aria-hidden="true"></div>
+      </div>
+    </section>
+
+    <footer class="composer-zone" id="composer">
+      {% if needs_mode %}
+      <div class="classification-prompt">
+        <strong>Что находится в поле?</strong>
+        <button type="button" data-force-mode="material">Материал</button>
+        <button type="button" data-force-mode="question">Вопрос</button>
+        <button type="button" data-force-mode="response">Ответ ИИ</button>
+      </div>
+      {% endif %}
+      {% if offer_new_case %}
+      <form method="post" action="/cases/from-material" class="new-case-offer">
+        <textarea name="text" hidden>{{ composer_draft }}</textarea>
+        <span>Этот SQL относится к другому кейсу.</span>
+        <button type="submit">Создать отдельный кейс</button>
+      </form>
+      {% endif %}
+      <form method="post" action="/cases/{{ case.id }}/messages" enctype="multipart/form-data" class="composer" data-composer data-case-prefix="{{ case.token_prefix }}">
+        <div class="composer-toolbar">
+          <label class="attach-button" title="Добавить файл">
+            <span aria-hidden="true">＋</span><span class="visually-hidden">Добавить файл</span>
+            <input type="file" name="upload" accept=".txt,.sql,.log,text/plain" data-file-input>
+          </label>
+          <label class="mode-control">
+            <span class="visually-hidden">Тип сообщения</span>
+            <select name="mode" data-composer-mode>
+              <option value="auto" {% if composer_mode == 'auto' %}selected{% endif %}>Auto</option>
+              <option value="material" {% if composer_mode == 'material' %}selected{% endif %}>Материал</option>
+              <option value="question" {% if composer_mode == 'question' %}selected{% endif %}>Вопрос</option>
+              <option value="response" {% if composer_mode == 'response' %}selected{% endif %}>Ответ ИИ</option>
+            </select>
+          </label>
+          <span class="detected-kind" data-detected-kind>Auto</span>
+          <span class="selected-file" data-selected-file hidden></span>
+        </div>
+        <div class="composer-input-row">
+          <textarea name="text" rows="1" placeholder="{{ composer_placeholder }}" aria-label="Сообщение" data-composer-input>{{ composer_draft }}</textarea>
+          <button type="submit" class="send-button" aria-label="Отправить" title="Ctrl+Enter">↑</button>
+        </div>
+        <div class="composer-hint">Enter — новая строка · Ctrl+Enter — отправить</div>
+      </form>
+    </footer>
+    {% else %}
+    <header class="chat-header empty-header">
+      <button type="button" class="icon-button mobile-only" data-sidebar-open aria-label="Открыть список кейсов">☰</button>
+      <div class="chat-title"><h1>Plan Obfuscator</h1><div class="chat-meta">Oracle 19c · local</div></div>
+    </header>
+    <section class="empty-workspace">
+      <div class="empty-workspace-card">
+        <span class="welcome-icon" aria-hidden="true">◎</span>
+        <h1>Начните новый кейс</h1>
+        <p>Все SQL, планы, mappings и ответы сохраняются только локально.</p>
+        <form method="post" action="/cases/quick"><button class="new-case-button" type="submit">＋ Новый кейс</button></form>
+      </div>
+    </section>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

@@ -15,6 +15,7 @@ from ..models import (
     ReplacementOccurrence,
     RunArtifact,
     Symbol,
+    utc_now,
 )
 from ..parsing import ArtifactKind, EntityType, ParsedArtifact, TextOccurrence, parse_artifact
 from ..parsing.types import ParseFinding
@@ -239,11 +240,12 @@ class ObfuscationService:
 
     def run(self, case_id: str, question: str = "") -> ObfuscationRun:
         case = self._load_case(case_id)
-        if not case.artifacts:
+        active_artifacts = [artifact for artifact in case.artifacts if artifact.is_active]
+        if not active_artifacts:
             raise ValueError("Case has no artifacts")
 
         ordered_artifacts = sorted(
-            case.artifacts,
+            active_artifacts,
             key=lambda item: (TYPE_ORDER.get(item.detected_type, 99), item.created_at),
         )
         revisions = [self._current_revision(artifact) for artifact in ordered_artifacts]
@@ -291,6 +293,7 @@ class ObfuscationService:
             validation_status="warning" if finding_count else "ok",
         )
         self.session.add(run)
+        case.updated_at = utc_now()
         self.session.flush()
 
         for position, (artifact, revision, parsed, obfuscated) in enumerate(transformed):

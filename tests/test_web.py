@@ -61,7 +61,7 @@ def test_form_upload_accepts_cp1251(client) -> None:
     assert detail["artifacts"][0]["type"] == "sql"
 
 
-def test_used_artifact_cannot_be_deleted_from_history(client, fixture_text) -> None:
+def test_used_artifact_leaves_context_but_preserves_history(client, fixture_text) -> None:
     case_id = client.post("/api/cases", json={"title": "History"}).json()["id"]
     artifact = client.post(
         f"/api/cases/{case_id}/artifacts",
@@ -70,8 +70,10 @@ def test_used_artifact_cannot_be_deleted_from_history(client, fixture_text) -> N
     client.post(f"/api/cases/{case_id}/runs", json={"question": ""})
     response = client.post(f"/artifacts/{artifact['id']}/delete", follow_redirects=False)
     assert response.status_code == 303
-    assert "error=" in response.headers["location"]
-    assert len(client.get(f"/api/cases/{case_id}").json()["artifacts"]) == 1
+    assert "notice=" in response.headers["location"]
+    detail = client.get(f"/api/cases/{case_id}").json()
+    assert detail["artifacts"] == []
+    assert len(detail["runs"]) == 1
 
 
 def test_migration_is_repeatable(tmp_path: Path) -> None:
@@ -87,7 +89,7 @@ def test_migration_is_repeatable(tmp_path: Path) -> None:
         }
     finally:
         connection.close()
-    assert version == ("0001_initial",)
+    assert version == ("0002_artifact_active",)
     assert {"cases", "symbols", "obfuscation_runs", "responses"} <= tables
 
     config = Config()
@@ -107,3 +109,94 @@ def test_migration_is_repeatable(tmp_path: Path) -> None:
         connection.close()
     assert "cases" not in remaining
     command.upgrade(config, "head")
+
+
+def test_chat_workspace_and_universal_composer_flow(client, fixture_text) -> None:
+    empty = client.get("/")
+    assert empty.status_code == 200
+    assert "Начните новый кейс" in empty.text
+    assert "case-sidebar" in empty.text
+
+    created = client.post("/api/cases", json={"title": "Новый кейс"}).json()
+    case_id = created["id"]
+    material = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "auto"},
+    )
+    assert material.status_code == 201
+    assert material.json()["kind"] == "material"
+
+    question = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Почему запрос медленный?", "mode": "auto"},
+    )
+    assert question.status_code == 201
+    question_payload = question.json()
+    assert question_payload["kind"] == "question"
+    marker = next(
+        word.strip(".,;:()\"'")
+        for word in question_payload["prompt_text"].split()
+        if "_TBL_" in word
+    )
+
+    response = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": f"Проверьте {marker}", "mode": "auto"},
+    )
+    assert response.status_code == 201
+    assert response.json()["kind"] == "response"
+    assert "OBF_" not in response.json()["restored_text"]
+
+    detail = client.get(f"/cases/{case_id}")
+    assert detail.status_code == 200
+    assert "Почему запрос медленный?" in detail.text
+    assert 'role="log"' in detail.text
+    assert "Последний цикл" in detail.text
+    assert "Вся история" in detail.text
+    assert "Восстановленный ответ" in detail.text
+    assert "Показать оригинал" in detail.text
+    assert 'data-composer' in detail.text
+
+
+def test_chat_question_without_context_preserves_draft(client) -> None:
+    case_id = client.post("/api/cases", json={"title": "Новый кейс"}).json()["id"]
+    question = "Почему запрос медленный?"
+    response = client.post(
+        f"/cases/{case_id}/messages",
+        data={"text": question, "mode": "auto", "display_name": ""},
+    )
+    assert response.status_code == 422
+    assert "Сначала добавьте SQL" in response.text
+    assert question in response.text
+
+
+def test_chat_ambiguous_text_shows_inline_mode_choice(client) -> None:
+    case_id = client.post("/api/cases", json={"title": "Новый кейс"}).json()["id"]
+    payload = "\n".join(f"unknown diagnostic row {index}" for index in range(12))
+    response = client.post(
+        f"/cases/{case_id}/messages",
+        data={"text": payload, "mode": "auto", "display_name": ""},
+    )
+    assert response.status_code == 422
+    assert "Что находится в поле?" in response.text
+    assert 'data-force-mode="material"' in response.text
+    assert payload in response.text
+
+
+def test_context_changed_is_visible_after_new_material(client, fixture_text) -> None:
+    case_id = client.post("/api/cases", json={"title": "Новый кейс"}).json()["id"]
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "auto"},
+    )
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Проанализируй запрос", "mode": "auto"},
+    )
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": '1 - filter("O"."STATUS"=\'OPEN\')', "mode": "auto"},
+    )
+    page = client.get(f"/cases/{case_id}")
+    assert "Контекст изменился" in page.text
+    assert "Предыдущий цикл сохранён" in page.text

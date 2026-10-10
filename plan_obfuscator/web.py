@@ -7,7 +7,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -18,12 +18,28 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .config import Settings
 from .database import create_database_engine, create_session_factory, initialize_schema
 from .migration_runner import upgrade_database
-from .models import Artifact, ArtifactRevision, Case, ObfuscationRun, RunArtifact
-from .services import CaseService, ObfuscationService, ResponseService
+from .models import Artifact, ArtifactRevision, Case, ObfuscationRun, RunArtifact, utc_now
+from .services import CaseService, ChatService, ObfuscationService, ResponseService
 from .services.cases import CaseNotFoundError, SqlMismatchError
+from .services.chat import (
+    NEW_CASE_TITLE,
+    AmbiguousInputError,
+    ComposerMode,
+    MissingContextError,
+    MissingRunError,
+    SubmissionKind,
+)
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 MAX_ARTIFACT_BYTES = 20 * 1024 * 1024
+ARTIFACT_LABELS = {
+    "sql": "SQL",
+    "xplan": "XPLAN",
+    "sql_monitor": "SQL Monitor",
+    "outline": "Outline",
+    "predicates": "Predicates",
+    "unknown": "Material",
+}
 
 
 class CaseCreatePayload(BaseModel):
@@ -49,6 +65,57 @@ class ResponseCreatePayload(BaseModel):
     model_label: str = ""
 
 
+class ChatMessagePayload(BaseModel):
+    text: str = Field(min_length=1)
+    mode: ComposerMode = ComposerMode.AUTO
+    display_name: str = ""
+
+
+def latest_case_run(case: Case) -> ObfuscationRun | None:
+    return max(case.runs, key=lambda item: item.created_at, default=None)
+
+
+def case_sidebar_state(case: Case) -> dict[str, object]:
+    active_artifacts = [artifact for artifact in case.artifacts if artifact.is_active]
+    latest = latest_case_run(case)
+    state = "empty"
+    label = "Новый кейс"
+    if active_artifacts:
+        state = "materials"
+        label = f"Материалов: {len(active_artifacts)}"
+    if latest is not None:
+        state = "prompt"
+        label = "Prompt готов"
+        if latest.responses:
+            state = "response"
+            label = "Ответ восстановлен"
+        if latest.validation_status == "warning" or any(
+            response.unknown_markers for response in latest.responses
+        ):
+            state = "warning"
+            label = "Требует внимания"
+    return {
+        "case": case,
+        "state": state,
+        "label": label,
+        "artifact_count": len(active_artifacts),
+    }
+
+
+def case_context_changed(case: Case, latest: ObfuscationRun | None) -> bool:
+    if latest is None:
+        return False
+    current_revisions = {
+        artifact.current_revision_id
+        for artifact in case.artifacts
+        if artifact.is_active and artifact.current_revision_id is not None
+    }
+    run_revisions = {
+        item.artifact_revision_id for item in latest.run_artifacts
+    }
+    return current_revisions != run_revisions
+
+
 def decode_uploaded_content(content: bytes) -> str:
     if len(content) > MAX_ARTIFACT_BYTES:
         raise ValueError("Файл превышает лимит 20 МБ")
@@ -60,9 +127,15 @@ def decode_uploaded_content(content: bytes) -> str:
     raise ValueError("Unsupported text encoding")
 
 
-def redirect_to_case(case_id: str, **query: str) -> RedirectResponse:
+def redirect_to_case(
+    case_id: str,
+    *,
+    anchor: str = "",
+    **query: str,
+) -> RedirectResponse:
     suffix = f"?{urlencode(query)}" if query else ""
-    return RedirectResponse(f"/cases/{case_id}{suffix}", status_code=303)
+    fragment = f"#{anchor}" if anchor else ""
+    return RedirectResponse(f"/cases/{case_id}{suffix}{fragment}", status_code=303)
 
 
 def get_session(request: Request) -> Iterator[Session]:
@@ -132,12 +205,66 @@ def create_app(
         if case is None:
             raise HTTPException(status_code=404, detail="Case not found")
         case.artifacts.sort(key=lambda item: item.created_at)
-        case.runs.sort(key=lambda item: item.created_at, reverse=True)
+        case.runs.sort(key=lambda item: item.created_at)
         for artifact in case.artifacts:
             artifact.revisions.sort(key=lambda item: item.version)
         for run in case.runs:
-            run.responses.sort(key=lambda item: item.created_at, reverse=True)
+            run.responses.sort(key=lambda item: item.created_at)
         return case
+
+    def render_workspace(
+        request: Request,
+        session: Session,
+        case: Case | None,
+        *,
+        notice: str = "",
+        error: str = "",
+        composer_draft: str = "",
+        composer_mode: str = ComposerMode.AUTO.value,
+        needs_mode: bool = False,
+        offer_new_case: bool = False,
+        status_code: int = 200,
+    ) -> HTMLResponse:
+        cases = CaseService(session).list_cases()
+        sidebar_cases = [case_sidebar_state(item) for item in cases]
+        latest = latest_case_run(case) if case is not None else None
+        artifact_counts: dict[str, int] = {}
+        active_artifacts: list[Artifact] = []
+        if case is not None:
+            active_artifacts = [artifact for artifact in case.artifacts if artifact.is_active]
+            for artifact in active_artifacts:
+                artifact_counts[artifact.detected_type] = (
+                    artifact_counts.get(artifact.detected_type, 0) + 1
+                )
+        awaiting_response = bool(latest is not None and not latest.responses)
+        placeholder = (
+            "Вставьте ответ ChatGPT или Claude…"
+            if awaiting_response
+            else "Вставьте SQL, план, отчёт или задайте вопрос…"
+        )
+        return templates.TemplateResponse(
+            request=request,
+            name="case.html",
+            status_code=status_code,
+            context={
+                "case": case,
+                "sidebar_cases": sidebar_cases,
+                "latest_run": latest,
+                "context_changed": (
+                    case_context_changed(case, latest) if case is not None else False
+                ),
+                "artifact_counts": artifact_counts,
+                "active_artifacts": active_artifacts,
+                "artifact_labels": ARTIFACT_LABELS,
+                "notice": notice or request.query_params.get("notice", ""),
+                "error": error or request.query_params.get("error", ""),
+                "composer_draft": composer_draft,
+                "composer_mode": composer_mode,
+                "composer_placeholder": placeholder,
+                "needs_mode": needs_mode,
+                "offer_new_case": offer_new_case,
+            },
+        )
 
     @app.exception_handler(SqlMismatchError)
     async def sql_mismatch_handler(_request: Request, error: SqlMismatchError) -> JSONResponse:
@@ -148,13 +275,16 @@ def create_app(
         return {"status": "ok"}
 
     @app.get("/", response_class=HTMLResponse, name="home")
-    def home(request: Request, session: SessionDependency) -> HTMLResponse:
+    def home(request: Request, session: SessionDependency) -> Response:
         cases = CaseService(session).list_cases()
-        return templates.TemplateResponse(
-            request=request,
-            name="index.html",
-            context={"cases": cases},
-        )
+        if cases:
+            return RedirectResponse(f"/cases/{cases[0].id}", status_code=303)
+        return render_workspace(request, session, None)
+
+    @app.post("/cases/quick", name="create_case_quick")
+    def create_case_quick(session: SessionDependency) -> RedirectResponse:
+        case = CaseService(session).create_case(NEW_CASE_TITLE)
+        return redirect_to_case(case.id, anchor="composer")
 
     @app.post("/cases", name="create_case_form")
     def create_case_form(
@@ -175,15 +305,7 @@ def create_app(
         session: SessionDependency,
     ) -> HTMLResponse:
         case = load_case_view(session, case_id)
-        return templates.TemplateResponse(
-            request=request,
-            name="case.html",
-            context={
-                "case": case,
-                "notice": request.query_params.get("notice", ""),
-                "error": request.query_params.get("error", ""),
-            },
-        )
+        return render_workspace(request, session, case)
 
     @app.post("/cases/{case_id}/artifacts", name="add_artifact_form")
     async def add_artifact_form(
@@ -209,6 +331,127 @@ def create_app(
             case_id,
             notice=f"Добавлен артефакт: {result.artifact.display_name}",
         )
+
+    @app.post("/cases/{case_id}/messages", name="submit_chat_message")
+    async def submit_chat_message(
+        request: Request,
+        case_id: str,
+        session: SessionDependency,
+        text: Annotated[str, Form()] = "",
+        mode: Annotated[str, Form()] = ComposerMode.AUTO.value,
+        display_name: Annotated[str, Form()] = "",
+        upload: Annotated[UploadFile | None, File()] = None,
+    ) -> Response:
+        source = text
+        has_file = bool(upload is not None and upload.filename)
+        if has_file and upload is not None:
+            try:
+                source = decode_uploaded_content(await upload.read())
+            except ValueError as error:
+                case = load_case_view(session, case_id)
+                return render_workspace(
+                    request,
+                    session,
+                    case,
+                    error=str(error),
+                    composer_draft=text,
+                    composer_mode=mode,
+                    status_code=422,
+                )
+            if not display_name:
+                display_name = upload.filename or ""
+
+        try:
+            submission = ChatService(session).submit(
+                case_id,
+                source,
+                mode=mode,
+                display_name=display_name,
+                has_file=has_file,
+            )
+        except (AmbiguousInputError, MissingContextError, MissingRunError) as error:
+            case = load_case_view(session, case_id)
+            return render_workspace(
+                request,
+                session,
+                case,
+                error=str(error),
+                composer_draft=source,
+                composer_mode=mode,
+                needs_mode=isinstance(error, AmbiguousInputError),
+                status_code=422,
+            )
+        except SqlMismatchError as error:
+            case = load_case_view(session, case_id)
+            return render_workspace(
+                request,
+                session,
+                case,
+                error=str(error),
+                composer_draft=source,
+                composer_mode=ComposerMode.MATERIAL.value,
+                offer_new_case=True,
+                status_code=409,
+            )
+        except (ValueError, LookupError) as error:
+            case = load_case_view(session, case_id)
+            return render_workspace(
+                request,
+                session,
+                case,
+                error=str(error),
+                composer_draft=source,
+                composer_mode=mode,
+                status_code=422,
+            )
+
+        if submission.kind == SubmissionKind.MATERIAL and submission.artifact:
+            detected = submission.artifact.artifact.detected_type
+            label = ARTIFACT_LABELS.get(detected, "Material")
+            notice = f"Добавлен материал: {label}"
+        elif submission.kind == SubmissionKind.QUESTION:
+            notice = "Prompt готов к копированию"
+        else:
+            unknown_count = len(submission.response.unknown_markers) if submission.response else 0
+            notice = "Ответ восстановлен"
+            if unknown_count:
+                notice += f"; неизвестных маркеров: {unknown_count}"
+        return redirect_to_case(case_id, notice=notice, anchor="latest")
+
+    @app.post("/cases/from-material", name="create_case_from_material")
+    def create_case_from_material(
+        session: SessionDependency,
+        text: Annotated[str, Form()],
+        display_name: Annotated[str, Form()] = "",
+    ) -> RedirectResponse:
+        case = CaseService(session).create_case(NEW_CASE_TITLE)
+        try:
+            ChatService(session).submit(
+                case.id,
+                text,
+                mode=ComposerMode.MATERIAL,
+                display_name=display_name,
+            )
+        except Exception:
+            CaseService(session).delete_case(case.id)
+            raise
+        return redirect_to_case(
+            case.id,
+            notice="Создан отдельный кейс с материалом",
+            anchor="composer",
+        )
+
+    @app.post("/cases/{case_id}/rename", name="rename_case_form")
+    def rename_case_form(
+        case_id: str,
+        session: SessionDependency,
+        title: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        try:
+            CaseService(session).rename_case(case_id, title)
+        except ValueError as error:
+            return redirect_to_case(case_id, error=str(error))
+        return redirect_to_case(case_id, notice="Кейс переименован")
 
     @app.post("/artifacts/{artifact_id}/revisions", name="revise_artifact_form")
     def revise_artifact_form(
@@ -244,10 +487,14 @@ def create_app(
             .limit(1)
         )
         if used_count is not None:
+            artifact.is_active = False
+            artifact.case.updated_at = utc_now()
+            session.commit()
             return redirect_to_case(
                 case_id,
-                error="Источник уже входит в историю запусков и не может быть удалён.",
+                notice="Материал удалён из текущего контекста; история сохранена.",
             )
+        artifact.case.updated_at = utc_now()
         session.delete(artifact)
         session.commit()
         return redirect_to_case(case_id, notice="Артефакт удалён")
@@ -334,6 +581,7 @@ def create_app(
                     "revision_count": len(artifact.revisions),
                 }
                 for artifact in case.artifacts
+                if artifact.is_active
             ],
             "runs": [
                 {
@@ -361,6 +609,45 @@ def create_app(
             "type": result.artifact.detected_type,
             "revision_id": result.revision.id,
         }
+
+    @app.post("/api/cases/{case_id}/messages", status_code=201, name="api_chat_message")
+    def api_chat_message(
+        case_id: str,
+        payload: ChatMessagePayload,
+        session: SessionDependency,
+    ) -> dict[str, object]:
+        try:
+            submission = ChatService(session).submit(
+                case_id,
+                payload.text,
+                mode=payload.mode,
+                display_name=payload.display_name,
+            )
+        except CaseNotFoundError:
+            raise HTTPException(status_code=404, detail="Case not found") from None
+        except SqlMismatchError as error:
+            raise HTTPException(status_code=409, detail=str(error)) from None
+        except (AmbiguousInputError, MissingContextError, MissingRunError, ValueError) as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+
+        result: dict[str, object] = {
+            "kind": submission.kind.value,
+            "classification": {
+                "confidence": submission.classification.confidence,
+                "reason": submission.classification.reason,
+            },
+        }
+        if submission.artifact:
+            result["artifact_id"] = submission.artifact.artifact.id
+            result["artifact_type"] = submission.artifact.artifact.detected_type
+        if submission.run:
+            result["run_id"] = submission.run.id
+            result["prompt_text"] = submission.run.prompt_text
+        if submission.response:
+            result["response_id"] = submission.response.id
+            result["restored_text"] = submission.response.restored_text
+            result["unknown_markers"] = submission.response.unknown_markers
+        return result
 
     @app.post("/api/artifacts/{artifact_id}/revisions", status_code=201)
     def api_revise_artifact(
