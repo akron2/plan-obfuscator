@@ -1,0 +1,32 @@
+SQL_ID  a000000000002, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS INDEX(o IX_POB_STATUS_SECRET)
+POB_CASE_Q1_INDEX */        count(*) as PRIVATE_COUNT,
+max(o.AMOUNT_SECRET) as PRIVATE_MAX from LAB_SCHEMA01.POB_ORDERS_SECRET
+o where o.STATUS_SECRET = 'CONFIDENTIAL_OPEN'   and
+o.REGION_CODE_SECRET = 'SIBERIA_PRIVATE'   and o.AMOUNT_SECRET > 1111
+
+Plan hash value: 8000000002
+
+------------------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation                                   | Name                 | Rows  | Bytes | Cost (%CPU)| Time     | Pstart| Pstop |
+------------------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                            |                      |       |       |   652 (100)|          |       |       |
+|   1 |  SORT AGGREGATE                             |                      |     1 |    38 |            |          |       |       |
+|   2 |   PARTITION RANGE ALL                       |                      |  2667 |    98K|   652   (0)| 00:00:01 |     1 |     4 |
+|*  3 |    TABLE ACCESS BY LOCAL INDEX ROWID BATCHED| POB_ORDERS_SECRET    |  2667 |    98K|   652   (0)| 00:00:01 |     1 |     4 |
+|*  4 |     INDEX RANGE SCAN                        | IX_POB_STATUS_SECRET |  3000 |       |    21   (0)| 00:00:01 |     1 |     4 |
+------------------------------------------------------------------------------------------------------------------------------------
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - filter("O"."AMOUNT_SECRET">1111)
+   4 - access("O"."STATUS_SECRET"='CONFIDENTIAL_OPEN' AND "O"."REGION_CODE_SECRET"='SIBERIA_PRIVATE')
+
+Hint Report (identified by operation id / Query Block Name / Object Alias):
+Total hints for statement: 1 (E - Syntax error (1))
+---------------------------------------------------------------------------
+
+   1 -  SEL$1
+         E -  POB_CASE_Q1_INDEX

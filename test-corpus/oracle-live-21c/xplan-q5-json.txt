@@ -1,0 +1,35 @@
+SQL_ID  a00000000000c, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS POB_CASE_Q5_JSON */ count(*)
+as PRIVATE_JSON_COUNT from LAB_SCHEMA01.POB_CUSTOMERS_SECRET c where
+json_value(c.PROFILE_JSON_SECRET, '$.segment') = 'SEGMENT_PRIVATE'
+and json_value(c.PROFILE_JSON_SECRET, '$.tenant') = 'TENANT_PRIVATE'
+
+Plan hash value: 8000000012
+
+-----------------------------------------------------------------------------------------------------
+| Id  | Operation          | Name                 | Starts | E-Rows | A-Rows |   A-Time   | Buffers |
+-----------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT   |                      |      1 |        |      1 |00:00:00.01 |      60 |
+|   1 |  SORT AGGREGATE    |                      |      1 |      1 |      1 |00:00:00.01 |      60 |
+|*  2 |   TABLE ACCESS FULL| POB_CUSTOMERS_SECRET |      1 |      1 |    133 |00:00:00.01 |      60 |
+-----------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$1
+   2 - SEL$1 / "C"@"SEL$1"
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   2 - filter((JSON_VALUE("C"."PROFILE_JSON_SECRET" /*+ LOB_BY_VALUE */  FORMAT JSON ,
+              '$.segment' RETURNING VARCHAR2(4000) NULL ON ERROR)='SEGMENT_PRIVATE' AND
+              JSON_VALUE("C"."PROFILE_JSON_SECRET" /*+ LOB_BY_VALUE */  FORMAT JSON , '$.tenant' RETURNING
+              VARCHAR2(4000) NULL ON ERROR)='TENANT_PRIVATE'))
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=0) COUNT(*)[22]

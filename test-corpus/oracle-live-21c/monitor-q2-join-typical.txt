@@ -1,0 +1,42 @@
+SQL Monitoring Report
+
+SQL Text
+------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS USE_HASH(o c) FULL(o) POB_CASE_Q2_JOIN */ c.REGION_CODE_SECRET, count(*) as PRIVATE_ORDER_COUNT, sum(o.AMOUNT_SECRET) as PRIVATE_AMOUNT_SUM from LAB_SCHEMA01.POB_CUSTOMERS_SECRET c join LAB_SCHEMA01.POB_ORDERS_SECRET o on o.CUSTOMER_ID_SECRET = c.CUSTOMER_ID_SECRET where c.STATUS_SECRET = 'VIP_PRIVATE' group by c.REGION_CODE_SECRET
+
+Global Information
+------------------------------
+ Status              :  DONE (ALL ROWS)
+ Instance ID         :  42
+ Session             :  LAB_USER_PRIVATE (101:202)
+ SQL ID              :  a000000000007
+ SQL Execution ID    :  16770007
+ Execution Started   :  10/12/2026 12:00:00
+ First Refresh Time  :  10/12/2026 12:00:00
+ Last Refresh Time   :  10/12/2026 12:00:01
+ Duration            :  .008566s
+ Module/Action       :  LAB_MODULE_PRIVATE/LAB_ACTION_PRIVATE
+ Service             :  LAB_SERVICE_PRIVATE
+ Program             :  LAB_PROGRAM_PRIVATE@LAB_HOST_PRIVATE
+ Fetch Calls         :  2
+
+Global Stats
+=================================================
+| Elapsed |   Cpu   |  Other   | Fetch | Buffer |
+| Time(s) | Time(s) | Waits(s) | Calls |  Gets  |
+=================================================
+|    0.01 |    0.01 |     0.00 |     2 |    694 |
+=================================================
+
+SQL Plan Monitoring Details (Plan Hash Value=8000000007)
+=====================================================================================================================================================
+| Id |        Operation        |         Name         |  Rows   | Cost |   Time    | Start  | Execs |   Rows   |  Mem  | Activity | Activity Detail |
+|    |                         |                      | (Estim) |      | Active(s) | Active |       | (Actual) | (Max) |   (%)    |   (# samples)   |
+=====================================================================================================================================================
+|  0 | SELECT STATEMENT        |                      |         |      |         1 |     +0 |     1 |        4 |     . |          |                 |
+|  1 |   HASH GROUP BY         |                      |       4 |  206 |         1 |     +0 |     1 |        4 |     . |          |                 |
+|  2 |    HASH JOIN            |                      |   30000 |  205 |         1 |     +0 |     1 |     8550 |   1MB |          |                 |
+|  3 |     TABLE ACCESS FULL   | POB_CUSTOMERS_SECRET |    1000 |   17 |         1 |     +0 |     1 |      285 |     . |          |                 |
+|  4 |     PARTITION RANGE ALL |                      |   60000 |  188 |         1 |     +0 |     1 |    60000 |     . |          |                 |
+|  5 |      TABLE ACCESS FULL  | POB_ORDERS_SECRET    |   60000 |  188 |         1 |     +0 |     4 |    60000 |     . |          |                 |
+=====================================================================================================================================================

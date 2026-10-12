@@ -1,0 +1,69 @@
+SQL_ID  a00000000000b, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS POB_CASE_Q4_HIERARCHY */
+count(*) as PRIVATE_TREE_COUNT from (   select n.NODE_ID_SECRET,
+n.PARENT_ID_SECRET, n.NODE_NAME_SECRET   from
+LAB_SCHEMA01.POB_ORG_SECRET n   start with n.NODE_NAME_SECRET =
+'ROOT_PRIVATE'   connect by nocycle prior n.NODE_ID_SECRET =
+n.PARENT_ID_SECRET ) tree_private
+
+Plan hash value: 8000000011
+
+-------------------------------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation                                 | Name           | Starts | E-Rows | A-Rows |   A-Time   | Buffers |  OMem |  1Mem | Used-Mem |
+-------------------------------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                          |                |      1 |        |      1 |00:00:00.01 |       6 |       |       |          |
+|   1 |  SORT AGGREGATE                           |                |      1 |      1 |      1 |00:00:00.01 |       6 |       |       |          |
+|   2 |   VIEW                                    |                |      1 |      3 |    255 |00:00:00.01 |       6 |       |       |          |
+|*  3 |    CONNECT BY NO FILTERING WITH START-WITH|                |      1 |        |    255 |00:00:00.01 |       6 |  2048 |  2048 | 2048  (0)|
+|   4 |     TABLE ACCESS FULL                     | POB_ORG_SECRET |      1 |    255 |    255 |00:00:00.01 |       6 |       |       |          |
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$1
+   2 - SEL$2 / "TREE_PRIVATE"@"SEL$1"
+   3 - SEL$2
+   4 - SEL$3 / "N"@"SEL$3"
+
+Outline Data
+-------------
+
+  /*+
+      BEGIN_OUTLINE_DATA
+      IGNORE_OPTIM_EMBEDDED_HINTS
+      OPTIMIZER_FEATURES_ENABLE('21.1.0')
+      DB_VERSION('21.1.0')
+      ALL_ROWS
+      OUTLINE_LEAF(@"SEL$3")
+      OUTLINE_LEAF(@"SEL$4")
+      OUTLINE_LEAF(@"SEL$5")
+      OUTLINE_LEAF(@"SET$1")
+      OUTLINE_LEAF(@"SEL$2")
+      OUTLINE_LEAF(@"SEL$1")
+      NO_ACCESS(@"SEL$1" "TREE_PRIVATE"@"SEL$1")
+      NO_ACCESS(@"SEL$2" "connect$_by$_work$_set$_007"@"SEL$2")
+      NO_CONNECT_BY_FILTERING(@"SEL$2")
+      CONNECT_BY_COMBINE_SW(@"SEL$2")
+      FULL(@"SEL$5" "N"@"SEL$5")
+      FULL(@"SEL$4" "connect$_by$_pump$_003"@"SEL$4")
+      FULL(@"SEL$4" "N"@"SEL$4")
+      LEADING(@"SEL$4" "connect$_by$_pump$_003"@"SEL$4" "N"@"SEL$4")
+      USE_HASH(@"SEL$4" "N"@"SEL$4")
+      FULL(@"SEL$3" "N"@"SEL$3")
+      END_OUTLINE_DATA
+  */
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - access("N"."PARENT_ID_SECRET"=PRIOR NULL)
+       filter("N"."NODE_NAME_SECRET"='ROOT_PRIVATE')
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=0) COUNT(*)[22]
+   3 - "N"."PARENT_ID_SECRET"[NUMBER,22], "N"."NODE_ID_SECRET"[NUMBER,22], PRIOR NULL[22], LEVEL[4], CONNECT_BY_ISCYCLE[4]
+   4 - "N"."NODE_ID_SECRET"[NUMBER,22], "N"."PARENT_ID_SECRET"[NUMBER,22], "N"."NODE_NAME_SECRET"[VARCHAR2,100]

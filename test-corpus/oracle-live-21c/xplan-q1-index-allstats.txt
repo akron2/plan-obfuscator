@@ -1,0 +1,55 @@
+SQL_ID  a000000000003, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS INDEX(o IX_POB_STATUS_SECRET)
+POB_CASE_Q1_INDEX */        count(*) as PRIVATE_COUNT,
+max(o.AMOUNT_SECRET) as PRIVATE_MAX from LAB_SCHEMA01.POB_ORDERS_SECRET
+o where o.STATUS_SECRET = 'CONFIDENTIAL_OPEN'   and
+o.REGION_CODE_SECRET = 'SIBERIA_PRIVATE'   and o.AMOUNT_SECRET > 1111
+
+Plan hash value: 8000000003
+
+----------------------------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation                                   | Name                 | Starts | E-Rows | Pstart| Pstop | A-Rows |   A-Time   | Buffers |
+----------------------------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                            |                      |      1 |        |       |       |      1 |00:00:00.01 |     653 |
+|   1 |  SORT AGGREGATE                             |                      |      1 |      1 |       |       |      1 |00:00:00.01 |     653 |
+|   2 |   PARTITION RANGE ALL                       |                      |      1 |   2667 |     1 |     4 |   2664 |00:00:00.01 |     653 |
+|*  3 |    TABLE ACCESS BY LOCAL INDEX ROWID BATCHED| POB_ORDERS_SECRET    |      4 |   2667 |     1 |     4 |   2664 |00:00:00.01 |     653 |
+|*  4 |     INDEX RANGE SCAN                        | IX_POB_STATUS_SECRET |      3 |   3000 |     1 |     4 |   3000 |00:00:00.01 |      22 |
+----------------------------------------------------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$1
+   3 - SEL$1 / "O"@"SEL$1"
+   4 - SEL$1 / "O"@"SEL$1"
+
+Outline Data
+-------------
+
+  /*+
+      BEGIN_OUTLINE_DATA
+      IGNORE_OPTIM_EMBEDDED_HINTS
+      OPTIMIZER_FEATURES_ENABLE('21.1.0')
+      DB_VERSION('21.1.0')
+      ALL_ROWS
+      OUTLINE_LEAF(@"SEL$1")
+      INDEX_RS_ASC(@"SEL$1" "O"@"SEL$1" ("POB_ORDERS_SECRET"."STATUS_SECRET" "POB_ORDERS_SECRET"."REGION_CODE_SECRET"))
+      BATCH_TABLE_ACCESS_BY_ROWID(@"SEL$1" "O"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - filter("O"."AMOUNT_SECRET">1111)
+   4 - access("O"."STATUS_SECRET"='CONFIDENTIAL_OPEN' AND "O"."REGION_CODE_SECRET"='SIBERIA_PRIVATE')
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=0) COUNT(*)[22], MAX("O"."AMOUNT_SECRET")[22]
+   2 - "O"."AMOUNT_SECRET"[NUMBER,22]
+   3 - "O"."AMOUNT_SECRET"[NUMBER,22]
+   4 - "O".ROWID[ROWID,10]

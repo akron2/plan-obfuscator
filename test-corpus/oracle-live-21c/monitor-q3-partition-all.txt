@@ -1,0 +1,42 @@
+SQL Monitoring Report
+
+SQL Text
+------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS POB_CASE_Q3_PARTITION */ count(*) as PRIVATE_TOP_COUNT from ( select o.ORDER_ID_SECRET, row_number() over ( partition by o.CUSTOMER_ID_SECRET order by o.CREATED_AT_SECRET desc ) as RN_SECRET from LAB_SCHEMA01.POB_ORDERS_SECRET o where o.CREATED_AT_SECRET >= date '2026-01-01' and o.CREATED_AT_SECRET < date '2027-01-01' and o.NOTE_SECRET like 'NOTE_PRIVATE%' ) ranked_private where ranked_private.RN_SECRET <= 3
+
+Global Information
+------------------------------
+ Status              :  DONE (ALL ROWS)
+ Instance ID         :  42
+ Session             :  LAB_USER_PRIVATE (101:202)
+ SQL ID              :  a00000000000a
+ SQL Execution ID    :  16770010
+ Execution Started   :  10/12/2026 12:00:00
+ First Refresh Time  :  10/12/2026 12:00:00
+ Last Refresh Time   :  10/12/2026 12:00:01
+ Duration            :  .017572s
+ Module/Action       :  LAB_MODULE_PRIVATE/LAB_ACTION_PRIVATE
+ Service             :  LAB_SERVICE_PRIVATE
+ Program             :  LAB_PROGRAM_PRIVATE@LAB_HOST_PRIVATE
+ Fetch Calls         :  1
+
+Global Stats
+=================================================
+| Elapsed |   Cpu   |  Other   | Fetch | Buffer |
+| Time(s) | Time(s) | Waits(s) | Calls |  Gets  |
+=================================================
+|    0.02 |    0.02 |     0.00 |     1 |    210 |
+=================================================
+
+SQL Plan Monitoring Details (Plan Hash Value=8000000010)
+======================================================================================================================================================
+| Id |          Operation          |       Name        |  Rows   | Cost |   Time    | Start  | Execs |   Rows   |  Mem  | Activity | Activity Detail |
+|    |                             |                   | (Estim) |      | Active(s) | Active |       | (Actual) | (Max) |   (%)    |   (# samples)   |
+======================================================================================================================================================
+|  0 | SELECT STATEMENT            |                   |         |      |         1 |     +0 |     1 |        1 |     . |          |                 |
+|  1 |   SORT AGGREGATE            |                   |       1 |      |         1 |     +0 |     1 |        1 |     . |          |                 |
+|  2 |    VIEW                     |                   |    6000 |  220 |         1 |     +0 |     1 |     6000 |     . |          |                 |
+|  3 |     WINDOW SORT PUSHED RANK |                   |   19598 |  220 |         1 |     +0 |     1 |     6000 |   1MB |          |                 |
+|  4 |      PARTITION RANGE SINGLE |                   |   19598 |   63 |         1 |     +0 |     1 |    19796 |     . |          |                 |
+|  5 |       TABLE ACCESS FULL     | POB_ORDERS_SECRET |   19598 |   63 |         1 |     +0 |     1 |    19796 |     . |          |                 |
+======================================================================================================================================================

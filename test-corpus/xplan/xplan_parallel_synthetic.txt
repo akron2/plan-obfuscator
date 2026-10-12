@@ -1,0 +1,32 @@
+SQL_ID  p4r4ll3l00001, child number 0
+-------------------------------------
+select /*+ parallel(4) */ e.EMPLOYEE_PRIVATE, d.DEPARTMENT_PRIVATE
+from HR_PRIVATE.EMP_PRIVATE e
+join HR_PRIVATE.DEPT_PRIVATE d on d.DEPT_ID_PRIVATE = e.DEPT_ID_PRIVATE
+
+Plan hash value: 7654321098
+
+---------------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation                   | Name             | Rows | Bytes | Cost | Pstart| Pstop | TQ    | IN-OUT | PQ Distrib |
+---------------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT            |                  |  445 | 17800 |    5 |       |       |       |        |            |
+|   1 |  PX COORDINATOR             |                  |      |       |      |       |       |       |        |            |
+|   2 |   PX SEND QC (RANDOM)       | :TQ10001         |  445 | 17800 |    5 |       |       | Q1,01 | P->S   | QC (RAND)  |
+|*  3 |    HASH JOIN                |                  |  445 | 17800 |    5 |       |       | Q1,01 | PCWP   |            |
+|   4 |     PX PARTITION RANGE ALL  |                  |  107 |  1070 |    3 |     1 |     5 | Q1,01 | PCWC   |            |
+|   5 |      TABLE ACCESS FULL      | EMP_PRIVATE      |  107 |  1070 |    3 |     1 |    15 | Q1,01 | PCWP   |            |
+|   6 |     PX RECEIVE              |                  |   21 |   630 |    1 |       |       | Q1,01 | PCWP   |            |
+|   7 |      PX SEND PARTITION (KEY)| :TQ10000         |   21 |   630 |    1 |       |       | Q1,00 | P->P   | PART (KEY) |
+|   8 |       PX BLOCK ITERATOR     |                  |   21 |   630 |    1 |       |       | Q1,00 | PCWC   |            |
+|   9 |        TABLE ACCESS FULL    | DEPT_PRIVATE     |   21 |   630 |    1 |       |       | Q1,00 | PCWP   |            |
+---------------------------------------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+   3 - SEL$PARALLEL_PRIVATE
+   5 - SEL$PARALLEL_PRIVATE / "E"@"SEL$1"
+   9 - SEL$PARALLEL_PRIVATE / "D"@"SEL$1"
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+   3 - access("D"."DEPT_ID_PRIVATE"="E"."DEPT_ID_PRIVATE")

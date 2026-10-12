@@ -267,23 +267,30 @@ function parsePredicateSection(artifact: ParsedArtifact, start: number, end: num
 
 function parsePeekedBinds(artifact: ParsedArtifact, start: number, end: number): void {
   const fragment = artifact.sourceText.slice(start, end);
-  for (const match of fragment.matchAll(/(:[\p{L}\p{N}_$#]+).*?:\s*(.+?)\s*$/gimu)) {
-    const bind = match[1] ?? "";
-    const value = match[2] ?? "";
-    const bindStart = start + (match.index ?? 0) + match[0].indexOf(bind) + 1;
-    addOccurrence(
-      artifact,
-      makeOccurrence(
-        artifact.sourceText,
-        bindStart,
-        bindStart + bind.length - 1,
-        EntityType.Bind,
-        "xplan_peeked_bind",
-        { canonical: canonicalValue(EntityType.Bind, bind.slice(1)), quotingContext: "bind" }
-      )
-    );
+  for (const line of linesWithOffsets(fragment)) {
+    const valueMatch = line.text.match(/\)\s*:\s*(.+?)\s*(?:\r?\n)?$/u);
+    if (!valueMatch) continue;
+    const prefix = line.text.slice(0, valueMatch.index ?? 0);
+    const bindMatch = prefix.match(/:([\p{L}\p{N}_$#]+)/u);
+    if (bindMatch) {
+      const bind = bindMatch[1] ?? "";
+      const bindStart = start + line.offset + (bindMatch.index ?? 0) + 1;
+      addOccurrence(
+        artifact,
+        makeOccurrence(
+          artifact.sourceText,
+          bindStart,
+          bindStart + bind.length,
+          EntityType.Bind,
+          "xplan_peeked_bind",
+          { canonical: canonicalValue(EntityType.Bind, bind), quotingContext: "bind" }
+        )
+      );
+    }
+    const value = valueMatch[1] ?? "";
     if (value.toUpperCase() === "NULL") continue;
-    let valueStart = start + (match.index ?? 0) + match[0].lastIndexOf(value);
+    const matchStart = valueMatch.index ?? 0;
+    let valueStart = start + line.offset + matchStart + valueMatch[0].indexOf(value);
     let valueEnd = valueStart + value.length;
     let type = EntityType.StringLiteral;
     if (value.startsWith("'") && value.endsWith("'")) {
@@ -364,10 +371,8 @@ function reconcileIdentifiers(artifact: ParsedArtifact): void {
 
 export function parseXplan(source: string): ParsedArtifact {
   const artifact = emptyParsedArtifact(ArtifactKind.Xplan, source);
-  const sqlHeader = source.match(
-    /^\s*SQL_ID\s+([a-z0-9]+)\s*,\s*child number\s+(\d+)\s*\r?\n-+\s*\r?\n([\s\S]*?)(?=\r?\n\s*\r?\n\s*Plan hash value\s*:)/im
-  );
-  if (sqlHeader) {
+  const sqlHeaderPattern = /^\s*SQL_ID\s+([a-z0-9]+)\s*,\s*child number\s+(\d+)\s*\r?\n-+\s*\r?\n([\s\S]*?)(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|(?![\s\S]))/gim;
+  for (const sqlHeader of source.matchAll(sqlHeaderPattern)) {
     const sqlId = sqlHeader[1] ?? "";
     const child = sqlHeader[2] ?? "";
     const sql = sqlHeader[3] ?? "";
@@ -388,6 +393,13 @@ export function parseXplan(source: string): ParsedArtifact {
         "xplan_header"
       )
     );
+    addSqlRegion(artifact, sqlStart, sqlStart + sql.length);
+  }
+
+  const explainedSqlPattern = /^\s*(?:EXPLAINED SQL STATEMENT|SQL STATEMENT)\s*:\s*\r?\n-+\s*\r?\n([\s\S]*?)(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|(?![\s\S]))/gim;
+  for (const explainedSql of source.matchAll(explainedSqlPattern)) {
+    const sql = explainedSql[1] ?? "";
+    const sqlStart = groupOffset(explainedSql, sql);
     addSqlRegion(artifact, sqlStart, sqlStart + sql.length);
   }
 

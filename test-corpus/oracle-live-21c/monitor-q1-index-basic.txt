@@ -1,0 +1,29 @@
+SQL Monitoring Report
+
+SQL Text
+------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS INDEX(o IX_POB_STATUS_SECRET) POB_CASE_Q1_INDEX */ count(*) as PRIVATE_COUNT, max(o.AMOUNT_SECRET) as PRIVATE_MAX from LAB_SCHEMA01.POB_ORDERS_SECRET o where o.STATUS_SECRET = 'CONFIDENTIAL_OPEN' and o.REGION_CODE_SECRET = 'SIBERIA_PRIVATE' and o.AMOUNT_SECRET > 1111
+
+Global Information
+------------------------------
+ Status              :  DONE (ALL ROWS)
+ Instance ID         :  42
+ Session             :  LAB_USER_PRIVATE (101:202)
+ SQL ID              :  a000000000004
+ SQL Execution ID    :  16770004
+ Execution Started   :  10/12/2026 12:00:00
+ First Refresh Time  :  10/12/2026 12:00:00
+ Last Refresh Time   :  10/12/2026 12:00:01
+ Duration            :  .003827s
+ Module/Action       :  LAB_MODULE_PRIVATE/LAB_ACTION_PRIVATE
+ Service             :  LAB_SERVICE_PRIVATE
+ Program             :  LAB_PROGRAM_PRIVATE@LAB_HOST_PRIVATE
+ Fetch Calls         :  1
+
+Global Stats
+======================================
+| Elapsed |   Cpu   | Fetch | Buffer |
+| Time(s) | Time(s) | Calls |  Gets  |
+======================================
+|    0.00 |    0.00 |     1 |    653 |
+======================================

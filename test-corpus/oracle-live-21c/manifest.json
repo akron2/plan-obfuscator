@@ -1,0 +1,915 @@
+{
+  "schemaVersion": 1,
+  "source": "Docker Oracle 21c XE 21.3 synthetic matrix",
+  "normalizedSchema": "LAB_SCHEMA01",
+  "artifacts": [
+    {
+      "id": "xplan-q1-index-basic",
+      "file": "xplan-q1-index-basic.txt",
+      "kind": "xplan",
+      "caseId": "q1-index",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "SIBERIA_PRIVATE",
+        "POB_CASE_Q1_INDEX",
+        "8000000001"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 22,
+      "sourceCharacters": 1093
+    },
+    {
+      "id": "xplan-q1-index-typical",
+      "file": "xplan-q1-index-typical.txt",
+      "kind": "xplan",
+      "caseId": "q1-index",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "SIBERIA_PRIVATE",
+        "POB_CASE_Q1_INDEX",
+        "a000000000002",
+        "8000000002"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 35,
+      "sourceCharacters": 2123
+    },
+    {
+      "id": "xplan-q1-index-allstats",
+      "file": "xplan-q1-index-allstats.txt",
+      "kind": "xplan",
+      "caseId": "q1-index",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "SIBERIA_PRIVATE",
+        "POB_CASE_Q1_INDEX",
+        "a000000000003",
+        "8000000003"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 59,
+      "sourceCharacters": 2850
+    },
+    {
+      "id": "monitor-q1-index-basic",
+      "file": "monitor-q1-index-basic.txt",
+      "kind": "sql_monitor",
+      "caseId": "q1-index",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "SIBERIA_PRIVATE",
+        "POB_CASE_Q1_INDEX",
+        "a000000000004",
+        "16770004",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .003827s",
+        "Fetch Calls         :  1"
+      ],
+      "minOccurrences": 26,
+      "sourceCharacters": 1218
+    },
+    {
+      "id": "xplan-q2-join-all",
+      "file": "xplan-q2-join-all.txt",
+      "kind": "xplan",
+      "caseId": "q2-join",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "VIP_PRIVATE",
+        "PRIVATE_ORDER_COUNT",
+        "PRIVATE_AMOUNT_SUM",
+        "POB_CASE_Q2_JOIN",
+        "a000000000005",
+        "8000000005"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 93,
+      "sourceCharacters": 3621
+    },
+    {
+      "id": "xplan-q2-join-allstats",
+      "file": "xplan-q2-join-allstats.txt",
+      "kind": "xplan",
+      "caseId": "q2-join",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "VIP_PRIVATE",
+        "PRIVATE_ORDER_COUNT",
+        "PRIVATE_AMOUNT_SUM",
+        "POB_CASE_Q2_JOIN",
+        "a000000000006",
+        "8000000006"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 85,
+      "sourceCharacters": 3407
+    },
+    {
+      "id": "monitor-q2-join-typical",
+      "file": "monitor-q2-join-typical.txt",
+      "kind": "sql_monitor",
+      "caseId": "q2-join",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "VIP_PRIVATE",
+        "PRIVATE_ORDER_COUNT",
+        "PRIVATE_AMOUNT_SUM",
+        "POB_CASE_Q2_JOIN",
+        "a000000000007",
+        "8000000007",
+        "16770007",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .008566s",
+        "Fetch Calls         :  2"
+      ],
+      "minOccurrences": 35,
+      "sourceCharacters": 3058
+    },
+    {
+      "id": "monitor-q2-join-all",
+      "file": "monitor-q2-join-all.txt",
+      "kind": "sql_monitor",
+      "caseId": "q2-join",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "VIP_PRIVATE",
+        "PRIVATE_ORDER_COUNT",
+        "PRIVATE_AMOUNT_SUM",
+        "POB_CASE_Q2_JOIN",
+        "a000000000008",
+        "8000000008",
+        "16770008",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .008566s",
+        "Fetch Calls         :  2"
+      ],
+      "minOccurrences": 35,
+      "sourceCharacters": 3058
+    },
+    {
+      "id": "xplan-q3-partition-window",
+      "file": "xplan-q3-partition-window.txt",
+      "kind": "xplan",
+      "caseId": "q3-partition-window",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "ORDER_ID_SECRET",
+        "CREATED_AT_SECRET",
+        "NOTE_SECRET",
+        "PRIVATE_TOP_COUNT",
+        "RN_SECRET",
+        "NOTE_PRIVATE",
+        "POB_CASE_Q3_PARTITION",
+        "a000000000009",
+        "8000000009",
+        "RANKED_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 73,
+      "sourceCharacters": 3360
+    },
+    {
+      "id": "monitor-q3-partition-all",
+      "file": "monitor-q3-partition-all.txt",
+      "kind": "sql_monitor",
+      "caseId": "q3-partition-window",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "ORDER_ID_SECRET",
+        "CREATED_AT_SECRET",
+        "NOTE_SECRET",
+        "PRIVATE_TOP_COUNT",
+        "RN_SECRET",
+        "NOTE_PRIVATE",
+        "POB_CASE_Q3_PARTITION",
+        "a00000000000a",
+        "8000000010",
+        "16770010",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .017572s",
+        "Fetch Calls         :  1"
+      ],
+      "minOccurrences": 34,
+      "sourceCharacters": 3147
+    },
+    {
+      "id": "xplan-q4-hierarchy",
+      "file": "xplan-q4-hierarchy.txt",
+      "kind": "xplan",
+      "caseId": "q4-hierarchy",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORG_SECRET",
+        "NODE_ID_SECRET",
+        "PARENT_ID_SECRET",
+        "NODE_NAME_SECRET",
+        "PRIVATE_TREE_COUNT",
+        "ROOT_PRIVATE",
+        "POB_CASE_Q4_HIERARCHY",
+        "a00000000000b",
+        "8000000011",
+        "TREE_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 84,
+      "sourceCharacters": 3398
+    },
+    {
+      "id": "xplan-q5-json",
+      "file": "xplan-q5-json.txt",
+      "kind": "xplan",
+      "caseId": "q5-json",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "PROFILE_JSON_SECRET",
+        "PRIVATE_JSON_COUNT",
+        "SEGMENT_PRIVATE",
+        "TENANT_PRIVATE",
+        "$.segment",
+        "$.tenant",
+        "POB_CASE_Q5_JSON",
+        "a00000000000c",
+        "8000000012"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 30,
+      "sourceCharacters": 1864
+    },
+    {
+      "id": "xplan-q6-cte-union",
+      "file": "xplan-q6-cte-union.txt",
+      "kind": "xplan",
+      "caseId": "q6-cte-union",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "RECENT_PRIVATE",
+        "VIP_PRIVATE_CTE",
+        "ARCHIVED_PRIVATE",
+        "PRIVATE_SET_COUNT",
+        "POB_CASE_Q6_CTE_UNION",
+        "a00000000000d",
+        "8000000013",
+        "VIP_PRIVATE",
+        "SET_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 105,
+      "sourceCharacters": 4479
+    },
+    {
+      "id": "xplan-q7-parallel",
+      "file": "xplan-q7-parallel.txt",
+      "kind": "xplan",
+      "caseId": "q7-parallel",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "PRIVATE_PARALLEL_SUM",
+        "PARALLEL_PRIVATE",
+        "POB_CASE_Q7_PARALLEL",
+        "a00000000000e",
+        "8000000014"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 42,
+      "sourceCharacters": 2118
+    },
+    {
+      "id": "monitor-q7-parallel-all",
+      "file": "monitor-q7-parallel-all.txt",
+      "kind": "sql_monitor",
+      "caseId": "q7-parallel",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "PRIVATE_PARALLEL_SUM",
+        "PARALLEL_PRIVATE",
+        "POB_CASE_Q7_PARALLEL",
+        "a00000000000f",
+        "8000000015",
+        "16770015",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .005818s",
+        "Fetch Calls         :  1"
+      ],
+      "minOccurrences": 25,
+      "sourceCharacters": 2530
+    },
+    {
+      "id": "xplan-q8-bind",
+      "file": "xplan-q8-bind.txt",
+      "kind": "xplan",
+      "caseId": "q8-bind",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PRIVATE_BIND_COUNT",
+        "CONFIDENTIAL_OPEN",
+        "pob_region_private",
+        "BIND_REGION_PRIVATE",
+        "POB_CASE_Q8_BIND",
+        "a00000000000g",
+        "8000000016",
+        "POB_REGION_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 27,
+      "sourceCharacters": 1875
+    },
+    {
+      "id": "monitor-q8-bind-all",
+      "file": "monitor-q8-bind-all.txt",
+      "kind": "sql_monitor",
+      "caseId": "q8-bind",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PRIVATE_BIND_COUNT",
+        "CONFIDENTIAL_OPEN",
+        "pob_region_private",
+        "BIND_REGION_PRIVATE",
+        "POB_CASE_Q8_BIND",
+        "a00000000000h",
+        "8000000017",
+        "16770017",
+        "LAB_USER_PRIVATE",
+        "LAB_MODULE_PRIVATE",
+        "LAB_ACTION_PRIVATE",
+        "LAB_SERVICE_PRIVATE",
+        "LAB_PROGRAM_PRIVATE",
+        "LAB_HOST_PRIVATE",
+        "POB_REGION_PRIVATE"
+      ],
+      "mustKeep": [
+        "Status              :  DONE (ALL ROWS)",
+        "Execution Started   :  10/12/2026 12:00:00",
+        "First Refresh Time  :  10/12/2026 12:00:00",
+        "Last Refresh Time   :  10/12/2026 12:00:01",
+        "Duration            :  .004301s",
+        "Fetch Calls         :  1"
+      ],
+      "minOccurrences": 24,
+      "sourceCharacters": 3165
+    },
+    {
+      "id": "xplan-q9-pivot",
+      "file": "xplan-q9-pivot.txt",
+      "kind": "xplan",
+      "caseId": "q9-pivot",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CREATED_AT_SECRET",
+        "PRIVATE_SUM",
+        "CONFIDENTIAL_PRIVATE",
+        "ARCHIVED_PRIVATE_COL",
+        "pivot_private",
+        "POB_CASE_Q9_PIVOT",
+        "a00000000000i",
+        "8000000018",
+        "ARCHIVED_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 71,
+      "sourceCharacters": 2980
+    },
+    {
+      "id": "xplan-dml-insert",
+      "file": "xplan-dml-insert.txt",
+      "kind": "xplan",
+      "caseId": "pob_ins",
+      "mustMask": [
+        "POB_CUSTOMERS_SECRET",
+        "8000000019"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 6,
+      "sourceCharacters": 827
+    },
+    {
+      "id": "xplan-dml-update",
+      "file": "xplan-dml-update.txt",
+      "kind": "xplan",
+      "caseId": "pob_upd",
+      "mustMask": [
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "NOTE_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "8000000020"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 29,
+      "sourceCharacters": 1670
+    },
+    {
+      "id": "xplan-dml-delete",
+      "file": "xplan-dml-delete.txt",
+      "kind": "xplan",
+      "caseId": "pob_del",
+      "mustMask": [
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "DELETE_PRIVATE",
+        "DELETE_REGION_PRIVATE",
+        "8000000021"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 29,
+      "sourceCharacters": 1726
+    },
+    {
+      "id": "xplan-dml-merge",
+      "file": "xplan-dml-merge.txt",
+      "kind": "xplan",
+      "caseId": "pob_mrg",
+      "mustMask": [
+        "POB_CUSTOMERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "CUSTOMER_NAME_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PROFILE_JSON_SECRET",
+        "8000000022",
+        "PK_POB_CUSTOMERS_SECRET"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 61,
+      "sourceCharacters": 2764
+    },
+    {
+      "id": "xplan-remote",
+      "file": "xplan-remote.txt",
+      "kind": "xplan",
+      "caseId": "pob_rem",
+      "mustMask": [
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "REMOTE_STATUS_PRIVATE",
+        "8000000023",
+        "LAB_INSTANCE_PRIVATE"
+      ],
+      "mustKeep": [],
+      "minOccurrences": 14,
+      "sourceCharacters": 1583
+    }
+  ],
+  "sqlCases": [
+    {
+      "id": "sql-q1-index",
+      "file": "sql-q1-index.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CONFIDENTIAL_OPEN",
+        "SIBERIA_PRIVATE",
+        "POB_CASE_Q1_INDEX"
+      ],
+      "minOccurrences": 19,
+      "sourceCharacters": 320
+    },
+    {
+      "id": "sql-q2-join",
+      "file": "sql-q2-join.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "VIP_PRIVATE",
+        "PRIVATE_ORDER_COUNT",
+        "PRIVATE_AMOUNT_SUM",
+        "POB_CASE_Q2_JOIN"
+      ],
+      "minOccurrences": 25,
+      "sourceCharacters": 391
+    },
+    {
+      "id": "sql-q3-partition-window",
+      "file": "sql-q3-partition-window.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "ORDER_ID_SECRET",
+        "CREATED_AT_SECRET",
+        "NOTE_SECRET",
+        "PRIVATE_TOP_COUNT",
+        "RN_SECRET",
+        "NOTE_PRIVATE",
+        "POB_CASE_Q3_PARTITION"
+      ],
+      "minOccurrences": 25,
+      "sourceCharacters": 496
+    },
+    {
+      "id": "sql-q4-hierarchy",
+      "file": "sql-q4-hierarchy.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORG_SECRET",
+        "NODE_ID_SECRET",
+        "PARENT_ID_SECRET",
+        "NODE_NAME_SECRET",
+        "PRIVATE_TREE_COUNT",
+        "ROOT_PRIVATE",
+        "POB_CASE_Q4_HIERARCHY"
+      ],
+      "minOccurrences": 19,
+      "sourceCharacters": 336
+    },
+    {
+      "id": "sql-q5-json",
+      "file": "sql-q5-json.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "PROFILE_JSON_SECRET",
+        "PRIVATE_JSON_COUNT",
+        "SEGMENT_PRIVATE",
+        "TENANT_PRIVATE",
+        "$.segment",
+        "$.tenant",
+        "POB_CASE_Q5_JSON"
+      ],
+      "minOccurrences": 13,
+      "sourceCharacters": 277
+    },
+    {
+      "id": "sql-q6-cte-union",
+      "file": "sql-q6-cte-union.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "POB_ORDERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "RECENT_PRIVATE",
+        "VIP_PRIVATE_CTE",
+        "ARCHIVED_PRIVATE",
+        "PRIVATE_SET_COUNT",
+        "POB_CASE_Q6_CTE_UNION",
+        "VIP_PRIVATE"
+      ],
+      "minOccurrences": 31,
+      "sourceCharacters": 549
+    },
+    {
+      "id": "sql-q7-parallel",
+      "file": "sql-q7-parallel.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "PRIVATE_PARALLEL_SUM",
+        "PARALLEL_PRIVATE",
+        "POB_CASE_Q7_PARALLEL"
+      ],
+      "minOccurrences": 16,
+      "sourceCharacters": 264
+    },
+    {
+      "id": "sql-q8-bind",
+      "file": "sql-q8-bind.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "IX_POB_STATUS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PRIVATE_BIND_COUNT",
+        "CONFIDENTIAL_OPEN",
+        "pob_region_private",
+        "POB_CASE_Q8_BIND"
+      ],
+      "minOccurrences": 13,
+      "sourceCharacters": 260
+    },
+    {
+      "id": "sql-q9-pivot",
+      "file": "sql-q9-pivot.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "CREATED_AT_SECRET",
+        "PRIVATE_SUM",
+        "CONFIDENTIAL_PRIVATE",
+        "ARCHIVED_PRIVATE_COL",
+        "pivot_private",
+        "POB_CASE_Q9_PIVOT",
+        "ARCHIVED_PRIVATE"
+      ],
+      "minOccurrences": 21,
+      "sourceCharacters": 411
+    },
+    {
+      "id": "sql-dml-insert",
+      "file": "sql-dml-insert.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "CUSTOMER_NAME_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PROFILE_JSON_SECRET",
+        "INSERT_PRIVATE",
+        "INSERT_REGION_PRIVATE",
+        "INSERT_STATUS_PRIVATE",
+        "INSERT_SEGMENT_PRIVATE"
+      ],
+      "minOccurrences": 13,
+      "sourceCharacters": 301
+    },
+    {
+      "id": "sql-dml-update",
+      "file": "sql-dml-update.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "NOTE_SECRET",
+        "UPDATE_PRIVATE",
+        "CONFIDENTIAL_OPEN"
+      ],
+      "minOccurrences": 12,
+      "sourceCharacters": 159
+    },
+    {
+      "id": "sql-dml-delete",
+      "file": "sql-dml-delete.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "DELETE_PRIVATE",
+        "DELETE_REGION_PRIVATE"
+      ],
+      "minOccurrences": 9,
+      "sourceCharacters": 142
+    },
+    {
+      "id": "sql-dml-merge",
+      "file": "sql-dml-merge.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_CUSTOMERS_SECRET",
+        "CUSTOMER_ID_SECRET",
+        "CUSTOMER_NAME_SECRET",
+        "REGION_CODE_SECRET",
+        "STATUS_SECRET",
+        "PROFILE_JSON_SECRET",
+        "MERGE_PRIVATE",
+        "MERGE_REGION_PRIVATE",
+        "MERGE_STATUS_PRIVATE",
+        "MERGE_SEGMENT_PRIVATE"
+      ],
+      "minOccurrences": 29,
+      "sourceCharacters": 594
+    },
+    {
+      "id": "sql-remote",
+      "file": "sql-remote.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "STATUS_SECRET",
+        "AMOUNT_SECRET",
+        "PRIVATE_REMOTE_COUNT",
+        "REMOTE_STATUS_PRIVATE",
+        "POB_LINK_SECRET",
+        "remote_private"
+      ],
+      "minOccurrences": 12,
+      "sourceCharacters": 253
+    },
+    {
+      "id": "sql-ddl-create-table",
+      "file": "sql-ddl-create-table.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "DDL_TABLE_SECRET",
+        "ID_SECRET",
+        "PAYLOAD_PRIVATE",
+        "CREATED_PRIVATE",
+        "PK_DDL_TABLE_SECRET"
+      ],
+      "minOccurrences": 10,
+      "sourceCharacters": 214
+    },
+    {
+      "id": "sql-ddl-create-index",
+      "file": "sql-ddl-create-index.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "IX_DDL_PAYLOAD_SECRET",
+        "DDL_TABLE_SECRET",
+        "PAYLOAD_PRIVATE",
+        "CREATED_PRIVATE"
+      ],
+      "minOccurrences": 5,
+      "sourceCharacters": 113
+    },
+    {
+      "id": "sql-ddl-alter-table",
+      "file": "sql-ddl-alter-table.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "DDL_TABLE_SECRET",
+        "CK_DDL_PRIVATE",
+        "PAYLOAD_PRIVATE",
+        "DDL_VALUE_PRIVATE"
+      ],
+      "minOccurrences": 5,
+      "sourceCharacters": 124
+    },
+    {
+      "id": "sql-ddl-drop-table",
+      "file": "sql-ddl-drop-table.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "DDL_TABLE_SECRET"
+      ],
+      "minOccurrences": 2,
+      "sourceCharacters": 46
+    },
+    {
+      "id": "sql-plsql-block",
+      "file": "sql-plsql-block.sql",
+      "kind": "sql",
+      "mustMask": [
+        "LAB_SCHEMA01",
+        "POB_ORDERS_SECRET",
+        "ORDER_ID_SECRET",
+        "NOTE_SECRET",
+        "L_VALUE_PRIVATE",
+        "PLSQL_VALUE_PRIVATE"
+      ],
+      "minOccurrences": 9,
+      "sourceCharacters": 212
+    }
+  ]
+}

@@ -12,6 +12,7 @@
     "test": "npm run test --workspace=extension",
     "test:coverage": "npm run test:coverage --workspace=extension",
     "smoke:oracle": "npm run smoke:oracle --workspace=extension --",
+    "smoke:oracle-matrix": "npm run smoke:oracle-matrix --workspace=extension --",
     "smoke:chrome": "npm run smoke:chrome --workspace=extension --",
     "typecheck": "npm run typecheck --workspace=extension",
     "verify": "npm run verify --workspace=extension"

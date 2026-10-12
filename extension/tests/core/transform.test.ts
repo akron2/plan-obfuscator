@@ -17,6 +17,7 @@ describe("reversible transformation", () => {
     "sql/query.sql",
     "sql/oracle-edge.sql",
     "xplan/xplan_19c.txt",
+    "xplan/xplan_parallel_synthetic.txt",
     "sql-monitor/sql_monitor_19c.txt",
     "outline/outline.txt",
     "predicates/predicates.txt"

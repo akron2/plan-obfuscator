@@ -54,6 +54,7 @@ const KNOWN_HINTS = new Set([
   "INDEX_DESC",
   "INDEX_RS_ASC",
   "LEADING",
+  "MATERIALIZE",
   "MERGE",
   "MONITOR",
   "NO_MERGE",

@@ -1,0 +1,40 @@
+SQL Monitoring Report
+
+SQL Text
+------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS PARALLEL(o 4) FULL(o) POB_CASE_Q7_PARALLEL */ sum(o.AMOUNT_SECRET) as PRIVATE_PARALLEL_SUM from LAB_SCHEMA01.POB_ORDERS_SECRET o where o.AMOUNT_SECRET between 222 and 8888 and o.STATUS_SECRET <> 'PARALLEL_PRIVATE'
+
+Global Information
+------------------------------
+ Status              :  DONE (ALL ROWS)
+ Instance ID         :  42
+ Session             :  LAB_USER_PRIVATE (101:202)
+ SQL ID              :  a00000000000f
+ SQL Execution ID    :  16770015
+ Execution Started   :  10/12/2026 12:00:00
+ First Refresh Time  :  10/12/2026 12:00:00
+ Last Refresh Time   :  10/12/2026 12:00:01
+ Duration            :  .005818s
+ Module/Action       :  LAB_MODULE_PRIVATE/LAB_ACTION_PRIVATE
+ Service             :  LAB_SERVICE_PRIVATE
+ Program             :  LAB_PROGRAM_PRIVATE@LAB_HOST_PRIVATE
+ Fetch Calls         :  1
+
+Global Stats
+=================================================
+| Elapsed |   Cpu   |  Other   | Fetch | Buffer |
+| Time(s) | Time(s) | Waits(s) | Calls |  Gets  |
+=================================================
+|    0.01 |    0.00 |     0.00 |     1 |    634 |
+=================================================
+
+SQL Plan Monitoring Details (Plan Hash Value=8000000015)
+=========================================================================================================================================
+| Id |       Operation        |       Name        |  Rows   | Cost |   Time    | Start  | Execs |   Rows   | Activity | Activity Detail |
+|    |                        |                   | (Estim) |      | Active(s) | Active |       | (Actual) |   (%)    |   (# samples)   |
+=========================================================================================================================================
+|  0 | SELECT STATEMENT       |                   |         |      |         1 |     +0 |     1 |        1 |          |                 |
+|  1 |   SORT AGGREGATE       |                   |       1 |      |         1 |     +0 |     1 |        1 |          |                 |
+|  2 |    PARTITION RANGE ALL |                   |   41611 |  188 |         1 |     +0 |     1 |    41598 |          |                 |
+|  3 |     TABLE ACCESS FULL  | POB_ORDERS_SECRET |   41611 |  188 |         1 |     +0 |     4 |    41598 |          |                 |
+=========================================================================================================================================

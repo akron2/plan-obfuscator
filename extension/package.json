@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "smoke:oracle": "node scripts/oracle-smoke.mjs",
+    "smoke:oracle-matrix": "node scripts/oracle-matrix.mjs",
     "smoke:chrome": "node scripts/chrome-smoke.mjs",
     "typecheck": "tsc --noEmit",
     "verify": "npm run typecheck && npm run test && npm run build && node scripts/verify-build.mjs"
@@ -20,6 +21,7 @@
     "@vitest/coverage-v8": "^4.0.0",
     "archiver": "^7.0.1",
     "esbuild": "^0.25.0",
+    "fast-check": "^4.3.0",
     "jsdom": "^27.0.0",
     "typescript": "^5.9.0",
     "vitest": "^4.0.0"

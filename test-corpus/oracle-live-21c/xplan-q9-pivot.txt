@@ -1,0 +1,61 @@
+SQL_ID  a00000000000i, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS POB_CASE_Q9_PIVOT */ * from (
+  select o.REGION_CODE_SECRET, o.STATUS_SECRET, o.AMOUNT_SECRET   from
+LAB_SCHEMA01.POB_ORDERS_SECRET o   where o.CREATED_AT_SECRET >= date
+'2026-06-01' ) pivot_private pivot (   sum(AMOUNT_SECRET) as
+PRIVATE_SUM   for STATUS_SECRET in (     'CONFIDENTIAL_OPEN' as
+CONFIDENTIAL_PRIVATE,     'ARCHIVED_PRIVATE' as ARCHIVED_PRIVATE_COL
+) )
+
+Plan hash value: 8000000018
+
+-------------------------------------------------------------------------------------------------------------------------
+| Id  | Operation                 | Name              | Starts | E-Rows | Pstart| Pstop | A-Rows |   A-Time   | Buffers |
+-------------------------------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT          |                   |      1 |        |       |       |      4 |00:00:00.01 |     209 |
+|   1 |  HASH GROUP BY PIVOT      |                   |      1 |      4 |       |       |      4 |00:00:00.01 |     209 |
+|   2 |   PARTITION RANGE ITERATOR|                   |      1 |  11682 |     3 |     4 |  11502 |00:00:00.01 |     209 |
+|*  3 |    TABLE ACCESS FULL      | POB_ORDERS_SECRET |      2 |  11682 |     3 |     4 |  11502 |00:00:00.01 |     209 |
+-------------------------------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$117FC0EF
+   3 - SEL$117FC0EF / "O"@"SEL$2"
+
+Outline Data
+-------------
+
+  /*+
+      BEGIN_OUTLINE_DATA
+      IGNORE_OPTIM_EMBEDDED_HINTS
+      OPTIMIZER_FEATURES_ENABLE('21.1.0')
+      DB_VERSION('21.1.0')
+      ALL_ROWS
+      OUTLINE_LEAF(@"SEL$117FC0EF")
+      MERGE(@"SEL$F5BB74E1" >"SEL$3")
+      OUTLINE(@"SEL$3")
+      OUTLINE(@"SEL$F5BB74E1")
+      MERGE(@"SEL$2" >"SEL$1")
+      OUTLINE(@"SEL$1")
+      OUTLINE(@"SEL$2")
+      FULL(@"SEL$117FC0EF" "O"@"SEL$2")
+      USE_HASH_AGGREGATION(@"SEL$117FC0EF" GROUP_BY)
+      END_OUTLINE_DATA
+  */
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - filter("O"."CREATED_AT_SECRET">=TO_DATE(' 2026-06-01 00:00:00', 'syyyy-mm-dd hh24:mi:ss'))
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=1) "O"."REGION_CODE_SECRET"[VARCHAR2,30], SUM(CASE  WHEN ("O"."STATUS_SECRET"='CONFIDENTIAL_OPEN')
+       THEN "O"."AMOUNT_SECRET" END )[22], SUM(CASE  WHEN ("O"."STATUS_SECRET"='ARCHIVED_PRIVATE') THEN
+       "O"."AMOUNT_SECRET" END )[22]
+   2 - "O"."STATUS_SECRET"[VARCHAR2,30], "O"."REGION_CODE_SECRET"[VARCHAR2,30], "O"."AMOUNT_SECRET"[NUMBER,22]
+   3 - "O"."STATUS_SECRET"[VARCHAR2,30], "O"."REGION_CODE_SECRET"[VARCHAR2,30], "O"."AMOUNT_SECRET"[NUMBER,22]

@@ -1,0 +1,51 @@
+SQL_ID  a00000000000e, child number 0
+-------------------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS PARALLEL(o 4) FULL(o)
+POB_CASE_Q7_PARALLEL */        sum(o.AMOUNT_SECRET) as
+PRIVATE_PARALLEL_SUM from LAB_SCHEMA01.POB_ORDERS_SECRET o where
+o.AMOUNT_SECRET between 222 and 8888   and o.STATUS_SECRET <>
+'PARALLEL_PRIVATE'
+
+Plan hash value: 8000000014
+
+----------------------------------------------------------------------------------------------------
+| Id  | Operation            | Name              | Starts | E-Rows | A-Rows |   A-Time   | Buffers |
+----------------------------------------------------------------------------------------------------
+|   0 | SELECT STATEMENT     |                   |      1 |        |      1 |00:00:00.01 |     634 |
+|   1 |  SORT AGGREGATE      |                   |      1 |      1 |      1 |00:00:00.01 |     634 |
+|   2 |   PARTITION RANGE ALL|                   |      1 |  41611 |  41598 |00:00:00.01 |     634 |
+|*  3 |    TABLE ACCESS FULL | POB_ORDERS_SECRET |      4 |  41611 |  41598 |00:00:00.01 |     634 |
+----------------------------------------------------------------------------------------------------
+
+Query Block Name / Object Alias (identified by operation id):
+-------------------------------------------------------------
+
+   1 - SEL$1
+   3 - SEL$1 / "O"@"SEL$1"
+
+Outline Data
+-------------
+
+  /*+
+      BEGIN_OUTLINE_DATA
+      IGNORE_OPTIM_EMBEDDED_HINTS
+      OPTIMIZER_FEATURES_ENABLE('21.1.0')
+      DB_VERSION('21.1.0')
+      ALL_ROWS
+      OUTLINE_LEAF(@"SEL$1")
+      FULL(@"SEL$1" "O"@"SEL$1")
+      END_OUTLINE_DATA
+  */
+
+Predicate Information (identified by operation id):
+---------------------------------------------------
+
+   3 - filter(("O"."STATUS_SECRET"<>'PARALLEL_PRIVATE' AND "O"."AMOUNT_SECRET"<=8888 AND
+              "O"."AMOUNT_SECRET">=222))
+
+Column Projection Information (identified by operation id):
+-----------------------------------------------------------
+
+   1 - (#keys=0) SUM("O"."AMOUNT_SECRET")[22]
+   2 - (rowset=256) "O"."AMOUNT_SECRET"[NUMBER,22]
+   3 - (rowset=256) "O"."AMOUNT_SECRET"[NUMBER,22]

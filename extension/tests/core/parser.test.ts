@@ -19,6 +19,7 @@ describe("artifact detector and parsers", () => {
   it.each([
     ["sql/query.sql", ArtifactKind.Sql],
     ["xplan/xplan_19c.txt", ArtifactKind.Xplan],
+    ["xplan/xplan_parallel_synthetic.txt", ArtifactKind.Xplan],
     ["sql-monitor/sql_monitor_19c.txt", ArtifactKind.SqlMonitor],
     ["outline/outline.txt", ArtifactKind.Outline],
     ["predicates/predicates.txt", ArtifactKind.Predicates]
@@ -54,6 +55,67 @@ describe("artifact detector and parsers", () => {
     expect(artifact.extractedSql).toHaveLength(1);
   });
 
+  it("parses parallel-plan table queues without masking PX metrics", () => {
+    const source = corpus("xplan/xplan_parallel_synthetic.txt");
+    const artifact = parseArtifact(source);
+    const originals = artifact.occurrences.map((item) => item.original);
+    expect(originals).toEqual(expect.arrayContaining([
+      "p4r4ll3l00001",
+      "7654321098",
+      "EMP_PRIVATE",
+      "DEPT_PRIVATE",
+      "TQ10001",
+      "TQ10000",
+      "SEL$PARALLEL_PRIVATE"
+    ]));
+    expect(originals).not.toContain("Q1,01");
+    expect(originals).not.toContain("P->S");
+    expect(originals).not.toContain("PCWP");
+    expect(originals).not.toContain("445");
+  });
+
+  it("extracts wrapped SQL from the EXPLAINED SQL STATEMENT header", () => {
+    const source = `EXPLAINED SQL STATEMENT:\n` +
+      `------------------------\n` +
+      `select /*+ INDEX(o IX_PRIVATE) */ o.SECRET_COLUMN from LAB_SCHEMA.PRIVATE_TABLE o\n` +
+      `where o.STATUS_SECRET = 'PRIVATE_VALUE'\n\n` +
+      `Plan hash value: 1234567890\n\n` +
+      `----------------------------------------------------------\n` +
+      `| Id  | Operation                   | Name          |\n` +
+      `----------------------------------------------------------\n` +
+      `|   0 | SELECT STATEMENT            |               |\n` +
+      `|   1 |  TABLE ACCESS BY INDEX ROWID| PRIVATE_TABLE |\n` +
+      `----------------------------------------------------------\n`;
+    const artifact = parseArtifact(source);
+    const originals = artifact.occurrences.map((item) => item.original);
+    expect(artifact.extractedSql).toHaveLength(1);
+    expect(originals).toEqual(expect.arrayContaining([
+      "IX_PRIVATE",
+      "SECRET_COLUMN",
+      "LAB_SCHEMA",
+      "PRIVATE_TABLE",
+      "STATUS_SECRET",
+      "PRIVATE_VALUE"
+    ]));
+  });
+
+  it("masks peeked bind values even when Oracle omits the bind name", () => {
+    const source = `Plan hash value: 1234567890\n\n` +
+      `------------------------------------------------\n` +
+      `| Id  | Operation        | Name          |\n` +
+      `------------------------------------------------\n` +
+      `|   0 | SELECT STATEMENT |               |\n` +
+      `|   1 | TABLE ACCESS FULL| PRIVATE_TABLE |\n` +
+      `------------------------------------------------\n\n` +
+      `Peeked Binds (identified by position):\n` +
+      `--------------------------------------\n\n` +
+      `   1 - (VARCHAR2(30), CSID=873): 'BIND_VALUE_PRIVATE'\n`;
+    const artifact = parseArtifact(source);
+    expect(artifact.occurrences.some((item) =>
+      item.original === "BIND_VALUE_PRIVATE" && item.entityType === EntityType.StringLiteral
+    )).toBe(true);
+  });
+
   it("parses SQL Monitor identity fields and leaves metrics untouched", () => {
     const source = corpus("sql-monitor/sql_monitor_19c.txt");
     const artifact = parseArtifact(source);
@@ -74,6 +136,23 @@ describe("artifact detector and parsers", () => {
     expect(originalValues).not.toContain("12.01");
     expect(originalValues).not.toContain("98765");
     expect(artifact.findings.filter((item) => item.severity === "error")).toHaveLength(0);
+  });
+
+  it("masks bind names and values from SQL Monitor bind tables", () => {
+    const source = `SQL Monitoring Report\n\n` +
+      `Binds\n` +
+      `==============================================================\n` +
+      `|      Name       | Position |    Type     |       Value        |\n` +
+      `==============================================================\n` +
+      `| :REGION_PRIVATE |        1 | VARCHAR2(32)| SIBERIA_PRIVATE   |\n` +
+      `==============================================================\n`;
+    const artifact = parseArtifact(source);
+    expect(artifact.occurrences.some((item) =>
+      item.original === "REGION_PRIVATE" && item.entityType === EntityType.Bind
+    )).toBe(true);
+    expect(artifact.occurrences.some((item) =>
+      item.original === "SIBERIA_PRIVATE" && item.entityType === EntityType.StringLiteral
+    )).toBe(true);
   });
 
   it("masks unknown SQL Monitor sections conservatively", () => {

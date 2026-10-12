@@ -1,0 +1,7 @@
+select /*+ MONITOR GATHER_PLAN_STATISTICS POB_CASE_Q4_HIERARCHY */ count(*) as PRIVATE_TREE_COUNT
+from (
+  select n.NODE_ID_SECRET, n.PARENT_ID_SECRET, n.NODE_NAME_SECRET
+  from LAB_SCHEMA01.POB_ORG_SECRET n
+  start with n.NODE_NAME_SECRET = 'ROOT_PRIVATE'
+  connect by nocycle prior n.NODE_ID_SECRET = n.PARENT_ID_SECRET
+) tree_private

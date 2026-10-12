@@ -1,0 +1,19 @@
+EXPLAINED SQL STATEMENT:
+------------------------
+select /*+ MONITOR GATHER_PLAN_STATISTICS INDEX(o IX_POB_STATUS_SECRET)
+POB_CASE_Q1_INDEX */        count(*) as PRIVATE_COUNT,
+max(o.AMOUNT_SECRET) as PRIVATE_MAX from LAB_SCHEMA01.POB_ORDERS_SECRET
+o where o.STATUS_SECRET = 'CONFIDENTIAL_OPEN'   and
+o.REGION_CODE_SECRET = 'SIBERIA_PRIVATE'   and o.AMOUNT_SECRET > 1111
+
+Plan hash value: 8000000001
+
+----------------------------------------------------------------------------
+| Id  | Operation                                   | Name                 |
+----------------------------------------------------------------------------
+|   0 | SELECT STATEMENT                            |                      |
+|   1 |  SORT AGGREGATE                             |                      |
+|   2 |   PARTITION RANGE ALL                       |                      |
+|   3 |    TABLE ACCESS BY LOCAL INDEX ROWID BATCHED| POB_ORDERS_SECRET    |
+|   4 |     INDEX RANGE SCAN                        | IX_POB_STATUS_SECRET |
+----------------------------------------------------------------------------

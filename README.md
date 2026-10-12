@@ -38,10 +38,17 @@ npm run verify
 npm run test:coverage
 npm run smoke:chrome
 npm run smoke:oracle -- --container sqlexplorer-oracle21
+npm run smoke:oracle-matrix -- --container sqlexplorer-oracle21
 ```
 
 Oracle smoke выполняет реальный запрос в Docker, получает `DBMS_XPLAN` и SQL
 Monitor `TEXT`, проверяет source spans и exact round-trip TypeScript parser.
+
+Расширенная Oracle matrix создаёт временную синтетическую schema, выполняет
+index/join/partition/window/hierarchy/JSON/PIVOT/bind/distributed сценарии,
+строит DML plans и SQL Monitor разных уровней, затем удаляет schema и возвращает
+изменённые Oracle-параметры. Зафиксированный corpus находится в
+`test-corpus/oracle-live-21c`; пользовательских данных в нём нет.
 
 ## Установка unpacked build
 

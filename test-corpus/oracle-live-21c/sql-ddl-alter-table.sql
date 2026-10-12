@@ -1,0 +1,2 @@
+alter table LAB_SCHEMA01.DDL_TABLE_SECRET add constraint CK_DDL_PRIVATE
+      check (PAYLOAD_PRIVATE <> 'DDL_VALUE_PRIVATE')

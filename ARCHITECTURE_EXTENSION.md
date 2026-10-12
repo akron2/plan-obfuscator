@@ -12,14 +12,19 @@
 Проверено 2026-10-12:
 
 - strict TypeScript compilation;
-- 44 unit/integration tests для lexer/parser, exact restore, storage, service
+- 103 unit/integration tests для lexer/parser, exact restore, storage, service
   worker protocol, content integration и DOM adapters;
-- coverage: 86.1% statements, 89.5% lines, 93.9% functions;
+- coverage: 90.1% statements, 78.5% branches, 92.8% lines, 94.5% functions;
 - Manifest V3 permission/remote-code audit;
 - Chrome headless load-unpacked smoke без manifest/runtime ошибок;
 - live Docker Oracle smoke: ~39k DBMS_XPLAN и ~14k SQL Monitor TEXT обработаны
   за 117 ms, spans корректны, SQL извлечён, parser findings отсутствуют, exact
   round-trip подтверждён;
+- live Oracle matrix: 23 реальных XPLAN/SQL Monitor отчёта, 19 SQL/DDL/DML
+  входов, 440 golden sensitive values и 1 044 report spans; полный прогон
+  parser занимает около 70 ms;
+- 1 150 seeded property-based cases проверяют generated SQL, hostile/malformed
+  text и mutations реальных отчётов;
 - повторная ZIP-сборка с одинаковым SHA-256.
 
 ## Цель и критерии успеха
@@ -392,6 +397,23 @@ plaintext. Используется cross-origin extension document.
 
 ## Стратегия тестирования
 
+### Критерий безопасности parser
+
+Parser работает в privacy-first режиме:
+
+- false negative (чувствительное значение осталось открытым) считается
+  блокирующей ошибкой;
+- false positive (неопасное значение было замаскировано) допустим как
+  консервативный fallback;
+- исключение — известные performance metrics в структурных колонках отчётов:
+  они должны сохраняться, иначе AI теряет диагностическую ценность;
+- неизвестная Oracle-подобная секция маскируется целиком, а не пропускается.
+
+Одного exact round-trip недостаточно: он доказывает обратимость найденных spans,
+но не доказывает полноту обнаружения. Поэтому golden corpus содержит независимые
+ожидания `must_mask` и `must_keep`; тесты проверяют отсутствие всех `must_mask`
+после обфускации и сохранение всех `must_keep`.
+
 ### Parser corpus
 
 - Oracle 19c SELECT/DML, CTE, old outer join `(+)`, hints, quoted identifiers,
@@ -404,6 +426,53 @@ plaintext. Используется cross-origin extension document.
 - comments and free-form notes;
 - Unicode identifiers and values;
 - exact round-trip and damaged markers.
+
+### Live Oracle matrix
+
+Помимо одного smoke-запроса используется матрица синтетических запросов на
+Docker Oracle:
+
+- index access, joins, aggregation, sort/window, CTE/set operations и PIVOT;
+- partition pruning, hierarchical query, JSON expressions и bind peeking;
+- INSERT/UPDATE/DELETE/MERGE и distributed plans через временный DB link;
+- serial и parallel hints;
+- `DBMS_XPLAN` BASIC, TYPICAL, ALL и ALLSTATS LAST с ALIAS, OUTLINE,
+  PREDICATE, PROJECTION, PARTITION, PARALLEL, IOSTATS и MEMSTATS;
+- SQL Monitor TEXT уровней BASIC, TYPICAL и ALL;
+- malformed/truncated variants, SQL*Plus line wrapping и CRLF mutations.
+
+Oracle XE не создаёт полноценные PX operators даже после временного увеличения
+`parallel_max_servers`. Реальный PX layout поэтому покрыт отдельным synthetic
+fixture по документированному формату `TQ / IN-OUT / PQ Distrib`; для полного
+live-PX smoke потребуется Oracle Enterprise Edition. Это явно считается
+ограничением среды, а не доказанным live-сценарием.
+
+Матрица выявила и зафиксировала regression tests для четырёх реальных дефектов:
+
+- SQL из заголовка `EXPLAINED SQL STATEMENT` не извлекался;
+- Peeked Binds без имени bind оставлял значение открытым;
+- SQL Monitor bind table `Name | Position | Type | Value` не разбиралась;
+- смешанный prompt с несколькими report types мог оставить SQL ID открытым и
+  скрыть performance metrics консервативным fragment fallback.
+
+Результаты live matrix нормализуются в committed corpus без пользовательских
+данных. Для каждого артефакта сохраняется golden manifest с обязательными
+секретами, обязательными открытыми метриками, ожидаемым kind и минимальными
+структурными признаками. Live generation остаётся отдельным Docker smoke, а CI
+работает по зафиксированному corpus и не требует Oracle.
+
+### Generative invariants
+
+Property/mutation tests должны проверять:
+
+- parser не падает и не зависает на произвольном тексте;
+- каждый span находится в границах source и точно совпадает с `original`;
+- spans не пересекаются;
+- obfuscate → exact restore возвращает исходные bytes;
+- whitespace, CRLF, ширина plan table и отсутствие необязательных секций не
+  раскрывают `must_mask` значения;
+- повреждённые markers диагностируются и не восстанавливаются нечётко;
+- время обработки больших отчётов ограничено regression budget.
 
 ### Golden compatibility
 

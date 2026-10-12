@@ -317,6 +317,69 @@ function parseSensitiveTable(
 
 function parseBindSection(artifact: ParsedArtifact, start: number, end: number): void {
   const region = artifact.sourceText.slice(start, end);
+  const lines = linesWithOffsets(region);
+  for (let headerIndex = 0; headerIndex < lines.length; headerIndex += 1) {
+    const header = lines[headerIndex]!;
+    if (!header.text.trimStart().startsWith("|")) continue;
+    const headers = cellBounds(header.text).map(([left, right]) =>
+      normalizeWhitespace(header.text.slice(left, right)).toLowerCase()
+    );
+    const nameIndex = headers.indexOf("name");
+    const valueIndex = headers.indexOf("value");
+    if (nameIndex < 0 || valueIndex < 0) continue;
+    for (const line of lines.slice(headerIndex + 1)) {
+      if (/^\s*[-=]+\s*$/.test(line.text)) continue;
+      if (!line.text.trimStart().startsWith("|")) break;
+      const bounds = cellBounds(line.text);
+      const nameCell = bounds[nameIndex];
+      const valueCell = bounds[valueIndex];
+      if (!nameCell || !valueCell) continue;
+      const nameBounds = trimmedBounds(line.text, nameCell[0], nameCell[1]);
+      if (nameBounds) {
+        const rawName = line.text.slice(nameBounds[0], nameBounds[1]);
+        const prefix = rawName.startsWith(":") ? 1 : 0;
+        addOccurrence(
+          artifact,
+          makeOccurrence(
+            artifact.sourceText,
+            start + line.offset + nameBounds[0] + prefix,
+            start + line.offset + nameBounds[1],
+            EntityType.Bind,
+            "sql_monitor_bind_table",
+            { quotingContext: "bind" }
+          )
+        );
+      }
+      const valueBounds = trimmedBounds(line.text, valueCell[0], valueCell[1]);
+      if (!valueBounds) continue;
+      const rawValue = line.text.slice(valueBounds[0], valueBounds[1]);
+      if (!rawValue || rawValue.toUpperCase() === "NULL") continue;
+      let valueStart = start + line.offset + valueBounds[0];
+      let valueEnd = start + line.offset + valueBounds[1];
+      let type = EntityType.StringLiteral;
+      let quotingContext = "bind_value";
+      if (rawValue.startsWith("'") && rawValue.endsWith("'") && rawValue.length >= 2) {
+        valueStart += 1;
+        valueEnd -= 1;
+        quotingContext = "string";
+      } else if (/^[-+]?\d+(?:\.\d+)?(?:[Ee][-+]?\d+)?$/.test(rawValue)) {
+        type = EntityType.NumberLiteral;
+      }
+      addOccurrence(
+        artifact,
+        makeOccurrence(
+          artifact.sourceText,
+          valueStart,
+          valueEnd,
+          type,
+          "sql_monitor_bind_table_value",
+          { quotingContext }
+        )
+      );
+    }
+    break;
+  }
+
   for (const match of region.matchAll(/(:[\p{L}\p{N}_$#]+).*?(?:=|:)\s*(.+?)\s*$/gimu)) {
     const bind = match[1] ?? "";
     const value = match[2] ?? "";

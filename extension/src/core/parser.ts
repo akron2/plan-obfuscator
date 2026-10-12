@@ -115,6 +115,47 @@ function sqlRegionEnd(source: string): number {
   return source.length;
 }
 
+interface ReportRegion {
+  kind: ArtifactKind.Xplan | ArtifactKind.SqlMonitor;
+  start: number;
+  end: number;
+}
+
+function reportRegions(source: string): ReportRegion[] {
+  const pattern = /^(?:[ \t]*SQL Monitoring Report[ \t]*|[ \t]*SQL_ID\s+[a-z0-9]+\s*,\s*child number\s+\d+[ \t]*|[ \t]*(?:EXPLAINED SQL STATEMENT|SQL STATEMENT)\s*:[ \t]*|[ \t]*Plan hash value\s*:\s*\d+[ \t]*)$/gim;
+  const candidates = [...source.matchAll(pattern)].map((match) => {
+    const label = match[0].trim().toUpperCase();
+    const marker = label.startsWith("SQL MONITORING REPORT")
+      ? "monitor"
+      : label.startsWith("PLAN HASH VALUE")
+        ? "plan_hash"
+        : "xplan_header";
+    return { start: match.index ?? 0, marker } as const;
+  });
+  const accepted: Array<{ start: number; kind: ReportRegion["kind"]; ownsPlanHash: boolean }> = [];
+  for (const candidate of candidates) {
+    const previous = accepted.at(-1);
+    if (
+      candidate.marker === "plan_hash" &&
+      previous?.kind === ArtifactKind.Xplan &&
+      !previous.ownsPlanHash
+    ) {
+      previous.ownsPlanHash = true;
+      continue;
+    }
+    accepted.push({
+      start: candidate.start,
+      kind: candidate.marker === "monitor" ? ArtifactKind.SqlMonitor : ArtifactKind.Xplan,
+      ownsPlanHash: candidate.marker === "plan_hash"
+    });
+  }
+  return accepted.map((item, index) => ({
+    kind: item.kind,
+    start: item.start,
+    end: accepted[index + 1]?.start ?? source.length
+  }));
+}
+
 /**
  * Parses a complete chat prompt without treating ordinary prose as secret data.
  * Known reports may be embedded in prose; SQL snippets should preferably be in
@@ -123,10 +164,21 @@ function sqlRegionEnd(source: string): number {
  */
 export function parsePrompt(source: string): ParsedArtifact {
   const detected = detectArtifactKind(source);
-  if (detected !== ArtifactKind.Unknown) return parseArtifact(source, detected);
-
-  const aggregate = emptyParsedArtifact(ArtifactKind.Unknown, source);
+  const aggregate = emptyParsedArtifact(detected, source);
   const covered: Array<[number, number]> = [];
+  const reports = reportRegions(source);
+  if (reports.length > 0) {
+    for (const report of reports) {
+      appendRegion(
+        aggregate,
+        parseArtifact(source.slice(report.start, report.end), report.kind),
+        report.start
+      );
+      covered.push([report.start, report.end]);
+    }
+  } else if (detected !== ArtifactKind.Unknown) {
+    appendRegion(aggregate, parseArtifact(source, detected), 0);
+  }
   const fencePattern = /```(oracle|sql|plsql|text)?[ \t]*\r?\n([\s\S]*?)```/gi;
   for (const match of source.matchAll(fencePattern)) {
     const language = (match[1] ?? "").toLowerCase();
@@ -141,7 +193,7 @@ export function parsePrompt(source: string): ParsedArtifact {
     covered.push([bodyStart, bodyStart + body.length]);
   }
 
-  if (covered.length === 0) {
+  if (detected === ArtifactKind.Unknown && covered.length === 0) {
     const sqlStart = source.search(
       /(?:^|[\s:])(?:SELECT|WITH|INSERT|UPDATE|DELETE|MERGE|EXPLAIN|CREATE|ALTER|DROP|TRUNCATE|BEGIN|DECLARE)\b/im
     );
@@ -156,7 +208,7 @@ export function parsePrompt(source: string): ParsedArtifact {
     }
   }
 
-  if (covered.length === 0) {
+  if (detected === ArtifactKind.Unknown && covered.length === 0) {
     if (/\b(?:DBMS_XPLAN|SQL_ID|PLAN HASH VALUE|PREDICATE INFORMATION|SQL MONITOR(?:ING)? REPORT)\b/i.test(source)) {
       const fallback = parseUnknown(source);
       appendRegion(aggregate, fallback, 0);

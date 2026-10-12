@@ -1,0 +1,1 @@
+drop table LAB_SCHEMA01.DDL_TABLE_SECRET purge
