@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Восстановленный ответ</title>
+    <link rel="stylesheet" href="restored-frame.css">
+  </head>
+  <body>
+    <main class="card">
+      <header>
+        <div class="label"><span>🛡</span> Восстановлено локально</div>
+        <div class="actions">
+          <button id="toggle" type="button">Показать OBF</button>
+          <button id="copy" type="button">Копировать</button>
+        </div>
+      </header>
+      <div id="warning" class="warning hidden"></div>
+      <pre id="content" aria-live="polite">Загрузка…</pre>
+    </main>
+    <script type="module" src="restored-frame.js"></script>
+  </body>
+</html>

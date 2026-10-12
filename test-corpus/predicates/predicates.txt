@@ -1,0 +1,2 @@
+1 - access("C"."CUSTOMER_ID"="O"."CUSTOMER_ID")
+2 - filter("O"."STATUS"='OPEN' AND "O"."AMOUNT">1000)

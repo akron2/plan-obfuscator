@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Plan Obfuscator</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <div class="brand"><span class="shield">🛡</span><div><h1>Plan Obfuscator</h1><p>Oracle → AI, локально</p></div></div>
+        <span class="version" id="version"></span>
+      </header>
+
+      <section>
+        <h2>Сайты</h2>
+        <label class="row"><span>ChatGPT</span><input id="enabled-chatgpt" type="checkbox"></label>
+        <label class="row"><span>Claude</span><input id="enabled-claude" type="checkbox"></label>
+      </section>
+
+      <section>
+        <h2>Отправка</h2>
+        <label class="field">
+          <span>Guard для незащищённого текста</span>
+          <select id="send-guard">
+            <option value="block">Блокировать</option>
+            <option value="warn">Предупреждать</option>
+            <option value="off">Выключен</option>
+          </select>
+        </label>
+      </section>
+
+      <section>
+        <h2>Ответы</h2>
+        <label class="row"><span>Восстанавливать автоматически</span><input id="auto-restore" type="checkbox"></label>
+        <label class="row"><span>Скрывать OBF-оригинал</span><input id="hide-original" type="checkbox"></label>
+        <label class="row"><span>Обрабатывать видимые сообщения</span><input id="restore-visible" type="checkbox"></label>
+      </section>
+
+      <section class="mapping">
+        <h2>Mapping conversation</h2>
+        <p id="mapping-status">Откройте ChatGPT или Claude</p>
+        <div class="button-row">
+          <button id="clear-current" type="button" disabled>Очистить текущий</button>
+          <button id="clear-all" class="danger" type="button">Очистить все</button>
+        </div>
+      </section>
+      <div id="notice" role="status" aria-live="polite"></div>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

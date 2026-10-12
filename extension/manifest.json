@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "Plan Obfuscator",
+  "description": "Locally obfuscate Oracle SQL and execution diagnostics before sending them to AI chats.",
+  "version": "0.2.0",
+  "minimum_chrome_version": "114",
+  "incognito": "not_allowed",
+  "permissions": ["storage"],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "https://claude.ai/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Plan Obfuscator",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_start"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "composer-frame.html",
+        "composer-frame.js",
+        "composer-frame.css",
+        "restored-frame.html",
+        "restored-frame.js",
+        "restored-frame.css"
+      ],
+      "matches": ["https://chatgpt.com/*", "https://claude.ai/*"],
+      "use_dynamic_url": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "@plan-obfuscator/extension",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "package": "npm run build && node scripts/verify-build.mjs && node scripts/package.mjs",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "smoke:oracle": "node scripts/oracle-smoke.mjs",
+    "smoke:chrome": "node scripts/chrome-smoke.mjs",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm run test && npm run build && node scripts/verify-build.mjs"
+  },
+  "devDependencies": {
+    "@types/archiver": "^7.0.0",
+    "@types/chrome": "^0.1.32",
+    "@types/node": "^25.0.0",
+    "@vitest/coverage-v8": "^4.0.0",
+    "archiver": "^7.0.1",
+    "esbuild": "^0.25.0",
+    "jsdom": "^27.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^4.0.0"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "name": "plan-obfuscator",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Self-contained Oracle plan obfuscation Chrome extension",
+  "workspaces": [
+    "extension"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=extension",
+    "package": "npm run package --workspace=extension",
+    "test": "npm run test --workspace=extension",
+    "test:coverage": "npm run test:coverage --workspace=extension",
+    "smoke:oracle": "npm run smoke:oracle --workspace=extension --",
+    "smoke:chrome": "npm run smoke:chrome --workspace=extension --",
+    "typecheck": "npm run typecheck --workspace=extension",
+    "verify": "npm run verify --workspace=extension"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

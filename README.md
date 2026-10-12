@@ -1,150 +1,97 @@
 # Plan Obfuscator
 
-Локальное веб-приложение для обратимой обфускации Oracle SQL,
-`DBMS_XPLAN`, outline, predicates и SQL Monitor `TEXT` перед передачей материалов
-в ChatGPT или Claude.
+Самодостаточное Chrome Extension для обратимой обфускации Oracle SQL,
+`DBMS_XPLAN`, SQL Monitor `TEXT`, outline и predicates непосредственно в
+ChatGPT и Claude.
 
-Целевая архитектура и принятые решения описаны в
-[`ARCHITECTURE.md`](ARCHITECTURE.md).
+Расширение не запускает Python, localhost service или Native Messaging host.
+Parser, mapping, storage и UI полностью входят в Manifest V3 package.
 
-## Быстрый запуск
+## Основной workflow
 
-Требуется Python 3.11 или новее.
+1. Расширение размещает защищённый composer поверх штатного поля ChatGPT/Claude.
+2. Пользователь вводит или вставляет Oracle-материалы.
+3. Кнопка `Обфусцировать` заменяет чувствительные значения на стабильные
+   `OBF_*` markers.
+4. Только обфусцированный prompt записывается в штатный composer.
+5. Пользователь нажимает обычную кнопку Send.
+6. После завершения ответа расширение восстанавливает identifiers и показывает
+   текст в extension-origin iframe.
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-python -m plan_obfuscator
-```
+Mapping хранится локально по conversation. История prompts и responses не
+дублируется — её хранит сам AI chat.
 
-После запуска приложение откроется по адресу `http://127.0.0.1:8765`.
-По умолчанию SQLite находится в
-`%LOCALAPPDATA%\PlanObfuscator\plan_obfuscator.db`.
+## Разработка
 
-Путь можно переопределить переменной `PLAN_OBFUSCATOR_DATA_DIR`.
-
-### Запуск через `run.bat`
-
-При первом запуске `run.bat` создаёт изолированное окружение `.venv` в каталоге
-проекта и устанавливает в него зависимости из `pyproject.toml`. При следующих
-запусках версии проверяются локально внутри `.venv`: если они подходят, `pip` не
-запускается и обращений в интернет нет. Отсутствующие или несовместимые пакеты
-устанавливаются только в это окружение.
-
-Обычный запуск:
-
-```bat
-run.bat
-```
-
-Создание `.venv` не требует сети. Установка недостающих зависимостей через proxy:
-
-```bat
-run.bat --proxy http://proxy.example:3128
-```
-
-Параметр можно совмещать с параметрами приложения:
-
-```bat
-run.bat --proxy http://proxy.example:3128 --port 9000 --no-browser
-```
-
-Если используется proxy с логином или специальными символами, URL следует
-заключить в двойные кавычки. Готовый `PlanObfuscator.exe` уже содержит
-зависимости и в bootstrap не нуждается.
-
-## Работа с приложением
-
-1. Нажмите «Новый кейс». Один кейс соответствует одному логическому SQL.
-2. Вставьте SQL и связанные материалы в единое поле внизу. Формат определяется
-   автоматически; поддерживается также drag-and-drop `.sql`, `.txt` и `.log`.
-3. В одном кейсе можно хранить несколько `DBMS_XPLAN` и SQL Monitor отчётов для
-   разных выполнений этого SQL. Они отображаются в раскрываемой карточке контекста.
-4. Отправьте обычный текст с вопросом — приложение сразу сформирует prompt и
-   автоматически назовёт новый кейс по первому вопросу.
-5. Скопируйте prompt в ChatGPT или Claude. Не просите модель переименовывать
-   `OBF_*` маркеры.
-6. Вставьте ответ модели в то же поле. Приложение распознает его по markers,
-   восстановит известные сущности и сохранит сырой и восстановленный варианты.
-
-`Enter` добавляет новую строку, `Ctrl+Enter` отправляет. Лента по умолчанию
-показывает последний цикл; переключатель в header открывает всю историю.
-
-Mapping стабилен только внутри кейса. Новый кейс получает независимый набор
-маркеров. Редактирование источника создаёт новую ревизию; старые runs и ответы
-остаются привязаны к прежней ревизии.
-
-### Получение материалов Oracle 19c
-
-Расширенный план последнего cursor:
-
-```sql
-SELECT *
-FROM TABLE(
-  DBMS_XPLAN.DISPLAY_CURSOR(
-    NULL,
-    NULL,
-    'ALLSTATS LAST +OUTLINE +ALIAS +PREDICATE +PROJECTION +PEEKED_BINDS'
-  )
-);
-```
-
-SQL Monitor в поддерживаемом формате:
-
-```sql
-SELECT DBMS_SQLTUNE.REPORT_SQL_MONITOR(
-  sql_id       => :sql_id,
-  type         => 'TEXT',
-  report_level => 'ALL'
-)
-FROM dual;
-```
-
-Использование SQL Monitor должно соответствовать лицензированию Oracle в вашем
-контуре.
-
-## Что изменяется
-
-Маскируются identifiers Oracle, aliases, query blocks, SQL ID, plan hash,
-session/execution IDs, module/service/program/host, binds, SQL literals и
-пользовательские comments. Cost, rows, bytes, elapsed/CPU time, I/O, memory и
-timestamps сохраняются.
-
-Незнакомые секции и фрагменты маскируются целиком: приложение предпочитает
-потерять часть диагностической информации, а не оставить возможный секрет.
-
-## История и резервное копирование
-
-База является обычным SQLite без шифрования. Для резервного копирования при
-остановленном приложении достаточно скопировать файл `plan_obfuscator.db`.
-Защита файла и его резервных копий обеспечивается локальным контуром.
-
-## Ограничения первой версии
-
-- Oracle Database 19c;
-- SQL Monitor только в формате `TEXT`;
-- один логический SQL на кейс;
-- несколько планов и выполнений одного SQL поддерживаются;
-- обмен с языковой моделью выполняется вручную через copy/paste;
-- приложение не вызывает внешние API.
-
-## Тесты
+Требуется Node.js 22 или новее.
 
 ```powershell
-pytest
+npm install
+npm run verify
 ```
 
-Дополнительный smoke-тест на локальном Docker Oracle:
+Готовый unpacked extension находится в `extension/dist`.
+
+Отдельные проверки:
 
 ```powershell
-python .\scripts\oracle_smoke.py --container sqlexplorer-oracle21
+npm run test:coverage
+npm run smoke:chrome
+npm run smoke:oracle -- --container sqlexplorer-oracle21
 ```
 
-## Windows-сборка
+Oracle smoke выполняет реальный запрос в Docker, получает `DBMS_XPLAN` и SQL
+Monitor `TEXT`, проверяет source spans и exact round-trip TypeScript parser.
+
+## Установка unpacked build
+
+1. Откройте `chrome://extensions`.
+2. Включите Developer mode.
+3. Нажмите `Load unpacked`.
+4. Выберите каталог `extension/dist`.
+
+Для воспроизводимого ZIP:
 
 ```powershell
-.\scripts\build_windows.ps1
+npm run package
 ```
 
-Готовый executable появится в `dist\PlanObfuscator.exe`.
+Артефакт появится в `release/plan-obfuscator-v0.2.0.zip`.
+
+## Использование
+
+1. Откройте ChatGPT или Claude. Расширение накроет штатный composer своим
+   extension-origin редактором.
+2. Вставьте prompt вместе с Oracle SQL/планом. Для смешанного текста и SQL
+   рекомендуется fenced code block с языком `sql`.
+3. Нажмите `Обфусцировать`. В штатное поле попадёт только результат с `OBF_*`.
+4. Нажмите штатную кнопку Send.
+5. После завершения streaming восстановленный ответ появится в отдельном
+   extension-origin блоке с переключателем `восстановленный / OBF`.
+
+По умолчанию guard блокирует отправку незащищённого текста. Режимы `warn` и
+`off`, автоматическое восстановление, видимость OBF-оригинала и поддерживаемые
+сайты настраиваются в popup расширения.
+
+Расширение хранит только reversible mapping на conversation в
+`chrome.storage.local`. Prompt/response history не дублируется. Одноразовый
+payload восстановленного ответа живёт в `chrome.storage.session` до первого
+чтения iframe.
+
+## Архитектура
+
+Полная спецификация: [`ARCHITECTURE_EXTENSION.md`](ARCHITECTURE_EXTENSION.md).
+
+Предыдущая Python-реализация находится в [`legacy/python-app`](legacy/python-app)
+и не входит в extension build.
+
+## Поддержка и ограничения
+
+- Chrome 114+, Manifest V3; incognito отключён.
+- Oracle 19c semantics; live smoke дополнительно проверен на Oracle XE 21c.
+- Поддерживаются SQL, `DBMS_XPLAN`, SQL Monitor `TEXT`, outline, predicates,
+  quoted identifiers, q/nq strings, binds, database links и legacy outer join.
+- DOM ChatGPT/Claude не является публичным API. Adapter работает fail-safe:
+  если composer не найден, plaintext в страницу не записывается.
+- Mapping не шифруется: продукт рассчитан на локальный защищённый профиль, как
+  и было согласовано.

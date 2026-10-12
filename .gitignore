@@ -11,3 +11,9 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+node_modules/
+extension/dist/
+extension/coverage/
+release/
+*.tsbuildinfo
+.DS_Store

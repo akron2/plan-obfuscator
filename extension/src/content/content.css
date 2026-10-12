@@ -1,0 +1,29 @@
+#plan-obfuscator-secure-composer {
+  position: fixed;
+  z-index: 2147483000;
+  border: 0;
+  border-radius: 18px;
+  background: transparent;
+  color-scheme: light dark;
+  box-shadow: 0 0 0 1px color-mix(in srgb, #6d5dfc 35%, transparent);
+}
+
+.plan-obfuscator-native-concealed {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  caret-color: transparent !important;
+}
+
+.plan-obfuscator-restored-frame {
+  display: block;
+  width: 100%;
+  min-height: 88px;
+  border: 0;
+  margin: 8px 0;
+  background: transparent;
+  color-scheme: light dark;
+}
+
+.plan-obfuscator-original-hidden {
+  display: none !important;
+}
