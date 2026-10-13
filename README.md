@@ -48,7 +48,11 @@ Monitor `TEXT`, проверяет source spans и exact round-trip TypeScript p
 index/join/partition/window/hierarchy/JSON/PIVOT/bind/distributed сценарии,
 строит DML plans и SQL Monitor разных уровней, затем удаляет schema и возвращает
 изменённые Oracle-параметры. Зафиксированный corpus находится в
-`test-corpus/oracle-live-21c`; пользовательских данных в нём нет.
+`test-corpus/generated/oracle-21c`; пользовательских данных в нём нет.
+
+Все corpus-файлы обнаруживаются автоматически. Отдельно проверить только их
+можно командой `npm run test:corpus`; новые обезличенные файлы добавляются в
+`test-corpus/user` без изменения test code.
 
 ## Установка unpacked build
 

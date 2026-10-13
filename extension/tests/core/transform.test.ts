@@ -1,35 +1,17 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createConversationMapping,
   markerHasValidChecksum,
   validateMapping
 } from "../../src/core/symbol-registry";
-import { markerCount, obfuscatePrompt, restoreExact, restoreText } from "../../src/core/transform";
+import { obfuscatePrompt, restoreText } from "../../src/core/transform";
+import { corpusCase } from "../helpers/corpus";
 
 function corpus(path: string): string {
-  return readFileSync(resolve(import.meta.dirname, "../../../test-corpus", path), "utf8");
+  return corpusCase(`canonical/${path}`).source;
 }
 
 describe("reversible transformation", () => {
-  it.each([
-    "sql/query.sql",
-    "sql/oracle-edge.sql",
-    "xplan/xplan_19c.txt",
-    "xplan/xplan_parallel_synthetic.txt",
-    "sql-monitor/sql_monitor_19c.txt",
-    "outline/outline.txt",
-    "predicates/predicates.txt"
-  ])("has byte-exact direct round trip for %s", (path) => {
-    const source = corpus(path);
-    const mapping = createConversationMapping("test", "conversation", "ABC123");
-    const result = obfuscatePrompt(source, mapping);
-    expect(result.replacementCount).toBeGreaterThan(0);
-    expect(markerCount(result.text)).toBeGreaterThan(0);
-    expect(restoreExact(result)).toBe(source);
-  });
-
   it("reuses symbols within one conversation and separates conversations", () => {
     const source = "select o.order_id from sales.orders o where o.status = 'OPEN'";
     const mapping = createConversationMapping("chatgpt", "one", "AAA111");

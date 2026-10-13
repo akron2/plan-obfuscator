@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/akron2/plan-obfuscator/test-corpus/corpus.schema.json",
+  "title": "Plan Obfuscator corpus expectations",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "suite", "source", "cases"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "suite": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "source": { "type": "string", "minLength": 1 },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file",
+          "kind",
+          "replace",
+          "keep",
+          "minOccurrences",
+          "allowFindings",
+          "tags"
+        ],
+        "properties": {
+          "file": { "type": "string", "minLength": 1 },
+          "kind": {
+            "enum": ["sql", "xplan", "sql_monitor", "outline", "predicates"]
+          },
+          "replace": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "keep": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "minOccurrences": { "type": "integer", "minimum": 1 },
+          "allowFindings": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string", "minLength": 1 },
+            "uniqueItems": true
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,12 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { detectArtifactKind } from "../../src/core/detector";
 import { parseArtifact, parsePrompt } from "../../src/core/parser";
 import { ArtifactKind, EntityType } from "../../src/core/types";
+import { corpusCase } from "../helpers/corpus";
 
 function corpus(path: string): string {
-  return readFileSync(resolve(import.meta.dirname, "../../../test-corpus", path), "utf8");
+  return corpusCase(`canonical/${path}`).source;
 }
 
 function values(source: string, type: EntityType): string[] {
@@ -16,17 +14,6 @@ function values(source: string, type: EntityType): string[] {
 }
 
 describe("artifact detector and parsers", () => {
-  it.each([
-    ["sql/query.sql", ArtifactKind.Sql],
-    ["xplan/xplan_19c.txt", ArtifactKind.Xplan],
-    ["xplan/xplan_parallel_synthetic.txt", ArtifactKind.Xplan],
-    ["sql-monitor/sql_monitor_19c.txt", ArtifactKind.SqlMonitor],
-    ["outline/outline.txt", ArtifactKind.Outline],
-    ["predicates/predicates.txt", ArtifactKind.Predicates]
-  ])("detects %s", (path, expected) => {
-    expect(detectArtifactKind(corpus(path))).toBe(expected);
-  });
-
   it("classifies schemas, tables, aliases, columns, literals, bind and link in SQL", () => {
     const source = corpus("sql/oracle-edge.sql");
     const artifact = parseArtifact(source);
@@ -113,6 +100,17 @@ describe("artifact detector and parsers", () => {
     const artifact = parseArtifact(source);
     expect(artifact.occurrences.some((item) =>
       item.original === "BIND_VALUE_PRIVATE" && item.entityType === EntityType.StringLiteral
+    )).toBe(true);
+  });
+
+  it("masks a peeked bind name when its copied line is truncated", () => {
+    const source = `Plan hash value: 1234567890\n\n` +
+      `Peeked Binds (identified by position):\n` +
+      `--------------------------------------\n` +
+      `   1 - :REGION_PRIVATE (VAR`;
+    const artifact = parseArtifact(source);
+    expect(artifact.occurrences.some((item) =>
+      item.original === "REGION_PRIVATE" && item.entityType === EntityType.Bind
     )).toBe(true);
   });
 

@@ -12,9 +12,9 @@
 Проверено 2026-10-12:
 
 - strict TypeScript compilation;
-- 103 unit/integration tests для lexer/parser, exact restore, storage, service
+- 105 unit/integration tests для lexer/parser, exact restore, storage, service
   worker protocol, content integration и DOM adapters;
-- coverage: 90.1% statements, 78.5% branches, 92.8% lines, 94.5% functions;
+- coverage: 89.7% statements, 78.2% branches, 92.3% lines, 94.0% functions;
 - Manifest V3 permission/remote-code audit;
 - Chrome headless load-unpacked smoke без manifest/runtime ошибок;
 - live Docker Oracle smoke: ~39k DBMS_XPLAN и ~14k SQL Monitor TEXT обработаны
@@ -313,11 +313,10 @@ plan-obfuscator/
 │   ├── tests/
 │   └── scripts/
 ├── test-corpus/
-│   ├── sql/
-│   ├── xplan/
-│   ├── sql-monitor/
-│   ├── outline/
-│   └── predicates/
+│   ├── corpus.schema.json
+│   ├── canonical/
+│   ├── generated/oracle-21c/
+│   └── user/
 ├── legacy/
 │   └── python-app/
 └── README.md
@@ -473,6 +472,56 @@ Property/mutation tests должны проверять:
   раскрывают `must_mask` значения;
 - повреждённые markers диагностируются и не восстанавливаются нечётко;
 - время обработки больших отчётов ограничено regression budget.
+
+### Единая организация test corpus
+
+Corpus содержит только синтетические или заранее обезличенные данные. Отдельный
+режим для production-секретов не предусмотрен: такие данные в репозиторий и
+локальный corpus не помещаются.
+
+```text
+test-corpus/
+├── corpus.schema.json
+├── canonical/
+│   ├── expectations.json
+│   ├── sql/
+│   ├── xplan/
+│   ├── sql-monitor/
+│   ├── outline/
+│   └── predicates/
+├── generated/
+│   └── oracle-21c/
+│       ├── expectations.json
+│       └── cases...
+└── user/
+    └── README.md
+```
+
+Один loader рекурсивно находит все `.sql`, `.txt`, `.log` и `.out`. Файл не
+может быть молча проигнорирован и не требует регистрации для базовых проверок.
+Hardcoded списков путей в test files нет.
+
+Для каждого файла автоматически выполняются detection, проверка spans,
+непересечение замен, exact round-trip и сохранение структурированных metrics.
+Все токены, содержащие `PRIVATE` или `SECRET`, автоматически считаются
+обязательными для замены. SQL ID, plan hash, query blocks и identity fields
+проверяются по структуре формата.
+
+Необязательный `expectations.json` задаёт только дополнительные ожидания для
+файлов, которым недостаточно naming convention: ожидаемый kind, дополнительные
+значения `replace`/`keep`, минимальное число occurrences, разрешённые findings и
+tags. Формат един для SQL, XPLAN, SQL Monitor, outline и predicates; разделения
+на `artifacts` и `sqlCases` нет.
+
+Каждый expectations-файл проверяется по JSON Schema Draft 2020-12. Loader
+отклоняет неизвестные поля, дублирующиеся ссылки, отсутствующие файлы, выход
+пути за suite directory, невалидный UTF-8 и несоответствие ожидаемому kind.
+Поля `caseId` и `sourceCharacters` удаляются как неиспользуемые.
+
+Текущие небольшие 19c fixtures переносятся в `canonical`, Docker matrix — в
+`generated/oracle-21c`, а файлы, добавляемые пользователем через разработчика,
+помещаются в `user`. `npm test` всегда использует один и тот же loader для всех
+трёх источников.
 
 ### Golden compatibility
 

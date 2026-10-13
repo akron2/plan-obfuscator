@@ -10,6 +10,7 @@
     "build": "npm run build --workspace=extension",
     "package": "npm run package --workspace=extension",
     "test": "npm run test --workspace=extension",
+    "test:corpus": "npm run test:corpus --workspace=extension",
     "test:coverage": "npm run test:coverage --workspace=extension",
     "smoke:oracle": "npm run smoke:oracle --workspace=extension --",
     "smoke:oracle-matrix": "npm run smoke:oracle-matrix --workspace=extension --",

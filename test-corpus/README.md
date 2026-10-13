@@ -1,20 +1,34 @@
-# Neutral Oracle parser corpus
+# Oracle parser corpus
 
-Этот corpus является контрактом TypeScript core и не зависит от legacy Python
-package. Он содержит Oracle 19c SQL и текстовые diagnostic reports.
+Corpus является контрактом TypeScript parser и содержит только синтетические
+или заранее обезличенные данные.
 
-Expected assertions находятся в extension tests и проверяют:
+Структура:
 
-- entity categories и canonical values;
-- неизменность performance metrics;
-- stable mapping;
-- exact round-trip;
-- conservative fallback;
-- damaged marker detection.
+- `canonical/` — небольшие ручные Oracle 19c и synthetic regression fixtures;
+- `generated/oracle-21c/` — snapshot матрицы, реально полученной из Docker
+  Oracle XE 21.3;
+- `user/` — дополнительные обезличенные файлы пользователя;
+- `corpus.schema.json` — единая схема дополнительных ожиданий.
 
-`oracle-live-21c/` дополнительно содержит committed snapshot матрицы, реально
-сгенерированной на Docker Oracle XE 21.3: 23 XPLAN/SQL Monitor отчёта и 19
-исходных SQL/DDL/DML сценариев с golden `mustMask`/`mustKeep` ожиданиями.
+Все `.sql`, `.txt`, `.log` и `.out` обнаруживаются рекурсивно одним loader.
+Добавление файла не требует изменения test code. Автоматически проверяются kind,
+source spans, отсутствие пересечений, exact round-trip и сохранение metrics.
+Токены, содержащие `PRIVATE` или `SECRET`, обязаны исчезнуть после обфускации.
+Файл без таких токенов должен быть описан в `expectations.json`; иначе тест
+завершается ошибкой, чтобы слабый fixture не создавал ложное ощущение покрытия.
 
-`xplan/xplan_parallel_synthetic.txt` воспроизводит documented PX/TQ layout,
-который Oracle XE не способен сгенерировать как настоящий parallel execution.
+Необязательный `expectations.json` в каталоге suite добавляет нестандартные
+значения для замены и сохранения, минимальное число occurrences, разрешённые
+findings и tags. Файл строго проверяется по `corpus.schema.json`; неизвестные
+поля и ссылки на отсутствующие файлы считаются ошибкой.
+
+Запуск только corpus tests:
+
+```powershell
+npm run test:corpus
+```
+
+`canonical/xplan/xplan_parallel_synthetic.txt` воспроизводит documented PX/TQ
+layout, который Oracle XE не способен сгенерировать как настоящий parallel
+execution.

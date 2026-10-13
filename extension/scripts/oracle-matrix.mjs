@@ -575,12 +575,12 @@ const definitions = new Map([
   ]),
   ...dmlCases.map((item) => [item.id, { kind: "xplan", caseId: item.statementId.toLowerCase(), secrets: item.secrets }])
 ]);
-const manifest = {
+const expectations = {
+  $schema: "../../corpus.schema.json",
   schemaVersion: 1,
+  suite: "generated-oracle-21c",
   source: "Docker Oracle 21c XE 21.3 synthetic matrix",
-  normalizedSchema,
-  artifacts: [],
-  sqlCases: []
+  cases: []
 };
 const started = performance.now();
 function sentinelValues(text) {
@@ -624,16 +624,15 @@ for (const id of expectedIds) {
     );
   }
   if (core.restoreExact(transformed) !== text) throw new Error(`${id}: exact round-trip failed`);
-  manifest.artifacts.push({
-    id,
+  expectations.cases.push({
     file: `${id}.txt`,
     kind: definition.kind,
-    caseId: definition.caseId,
-    mustMask,
-    mustKeep: [...text.matchAll(/^\s*(?:Status|Execution Started|First Refresh Time|Last Refresh Time|Duration|Fetch Calls)\s*:\s*.*$/gim)]
+    replace: mustMask,
+    keep: [...text.matchAll(/^\s*(?:Status|Execution Started|First Refresh Time|Last Refresh Time|Duration|Fetch Calls)\s*:\s*.*$/gim)]
       .map((match) => match[0].trim()),
     minOccurrences: parsed.occurrences.length,
-    sourceCharacters: text.length
+    allowFindings: [],
+    tags: ["generated", "oracle-21c", definition.caseId]
   });
 }
 for (const item of [
@@ -648,33 +647,34 @@ for (const item of [
     .filter((value) => text.includes(value));
   const transformed = core.obfuscatePrompt(
     text,
-    core.createConversationMapping("oracle-matrix-sql", item.id, `S${String(manifest.sqlCases.length + 1).padStart(5, "0")}`)
+    core.createConversationMapping("oracle-matrix-sql", item.id, `S${String(expectations.cases.length + 1).padStart(5, "0")}`)
   );
   const leaked = mustMask.filter((value) => transformed.text.includes(value));
   if (leaked.length > 0) throw new Error(`${item.id}: SQL sensitive values leaked: ${leaked.join(", ")}`);
   if (core.restoreExact(transformed) !== text) throw new Error(`${item.id}: SQL exact round-trip failed`);
-  manifest.sqlCases.push({
-    id: item.id,
+  expectations.cases.push({
     file: `${item.id}.sql`,
     kind: "sql",
-    mustMask,
+    replace: mustMask,
+    keep: [],
     minOccurrences: transformed.replacementCount,
-    sourceCharacters: text.length
+    allowFindings: [],
+    tags: ["generated", "oracle-21c", "sql"]
   });
   artifacts.set(item.id, text);
 }
 const parseMilliseconds = performance.now() - started;
 
 if (writeCorpus) {
-  const outputDirectory = join(repositoryRoot, "test-corpus", "oracle-live-21c");
+  const outputDirectory = join(repositoryRoot, "test-corpus", "generated", "oracle-21c");
   await mkdir(outputDirectory, { recursive: true });
   for (const [id, text] of artifacts) {
     const extension = id.startsWith("sql-") ? "sql" : "txt";
     await writeFile(join(outputDirectory, `${id}.${extension}`), `${text}\n`, "utf8");
   }
   await writeFile(
-    join(outputDirectory, "manifest.json"),
-    `${JSON.stringify(manifest, null, 2)}\n`,
+    join(outputDirectory, "expectations.json"),
+    `${JSON.stringify(expectations, null, 2)}\n`,
     "utf8"
   );
 }
@@ -684,7 +684,9 @@ console.log(JSON.stringify({
   ephemeralSchema: schema,
   artifacts: expectedIds.length,
   characters: [...artifacts.values()].reduce((sum, text) => sum + text.length, 0),
-  occurrences: manifest.artifacts.reduce((sum, item) => sum + item.minOccurrences, 0),
+  occurrences: expectations.cases
+    .filter((item) => item.kind !== "sql")
+    .reduce((sum, item) => sum + item.minOccurrences, 0),
   parseMilliseconds: Math.round(parseMilliseconds * 100) / 100,
   corpusWritten: writeCorpus
 }, null, 2));

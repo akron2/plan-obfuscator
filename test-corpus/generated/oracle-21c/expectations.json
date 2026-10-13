@@ -1,14 +1,13 @@
 {
+  "$schema": "../../corpus.schema.json",
   "schemaVersion": 1,
+  "suite": "generated-oracle-21c",
   "source": "Docker Oracle 21c XE 21.3 synthetic matrix",
-  "normalizedSchema": "LAB_SCHEMA01",
-  "artifacts": [
+  "cases": [
     {
-      "id": "xplan-q1-index-basic",
       "file": "xplan-q1-index-basic.txt",
       "kind": "xplan",
-      "caseId": "q1-index",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -20,16 +19,19 @@
         "POB_CASE_Q1_INDEX",
         "8000000001"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 22,
-      "sourceCharacters": 1093
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q1-index"
+      ]
     },
     {
-      "id": "xplan-q1-index-typical",
       "file": "xplan-q1-index-typical.txt",
       "kind": "xplan",
-      "caseId": "q1-index",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -42,16 +44,19 @@
         "a000000000002",
         "8000000002"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 35,
-      "sourceCharacters": 2123
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q1-index"
+      ]
     },
     {
-      "id": "xplan-q1-index-allstats",
       "file": "xplan-q1-index-allstats.txt",
       "kind": "xplan",
-      "caseId": "q1-index",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -64,16 +69,19 @@
         "a000000000003",
         "8000000003"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 59,
-      "sourceCharacters": 2850
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q1-index"
+      ]
     },
     {
-      "id": "monitor-q1-index-basic",
       "file": "monitor-q1-index-basic.txt",
       "kind": "sql_monitor",
-      "caseId": "q1-index",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -92,23 +100,26 @@
         "LAB_PROGRAM_PRIVATE",
         "LAB_HOST_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .003827s",
+        "Duration            :  .002631s",
         "Fetch Calls         :  1"
       ],
       "minOccurrences": 26,
-      "sourceCharacters": 1218
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q1-index"
+      ]
     },
     {
-      "id": "xplan-q2-join-all",
       "file": "xplan-q2-join-all.txt",
       "kind": "xplan",
-      "caseId": "q2-join",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -123,16 +134,19 @@
         "a000000000005",
         "8000000005"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 93,
-      "sourceCharacters": 3621
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q2-join"
+      ]
     },
     {
-      "id": "xplan-q2-join-allstats",
       "file": "xplan-q2-join-allstats.txt",
       "kind": "xplan",
-      "caseId": "q2-join",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -147,16 +161,19 @@
         "a000000000006",
         "8000000006"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 85,
-      "sourceCharacters": 3407
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q2-join"
+      ]
     },
     {
-      "id": "monitor-q2-join-typical",
       "file": "monitor-q2-join-typical.txt",
       "kind": "sql_monitor",
-      "caseId": "q2-join",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -178,23 +195,26 @@
         "LAB_PROGRAM_PRIVATE",
         "LAB_HOST_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .008566s",
+        "Duration            :  .140839s",
         "Fetch Calls         :  2"
       ],
       "minOccurrences": 35,
-      "sourceCharacters": 3058
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q2-join"
+      ]
     },
     {
-      "id": "monitor-q2-join-all",
       "file": "monitor-q2-join-all.txt",
       "kind": "sql_monitor",
-      "caseId": "q2-join",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -216,23 +236,26 @@
         "LAB_PROGRAM_PRIVATE",
         "LAB_HOST_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .008566s",
+        "Duration            :  .140839s",
         "Fetch Calls         :  2"
       ],
       "minOccurrences": 35,
-      "sourceCharacters": 3058
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q2-join"
+      ]
     },
     {
-      "id": "xplan-q3-partition-window",
       "file": "xplan-q3-partition-window.txt",
       "kind": "xplan",
-      "caseId": "q3-partition-window",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -247,16 +270,19 @@
         "8000000009",
         "RANKED_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 73,
-      "sourceCharacters": 3360
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q3-partition-window"
+      ]
     },
     {
-      "id": "monitor-q3-partition-all",
       "file": "monitor-q3-partition-all.txt",
       "kind": "sql_monitor",
-      "caseId": "q3-partition-window",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -277,23 +303,26 @@
         "LAB_PROGRAM_PRIVATE",
         "LAB_HOST_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .017572s",
+        "Duration            :  .037214s",
         "Fetch Calls         :  1"
       ],
       "minOccurrences": 34,
-      "sourceCharacters": 3147
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q3-partition-window"
+      ]
     },
     {
-      "id": "xplan-q4-hierarchy",
       "file": "xplan-q4-hierarchy.txt",
       "kind": "xplan",
-      "caseId": "q4-hierarchy",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORG_SECRET",
         "NODE_ID_SECRET",
@@ -306,16 +335,19 @@
         "8000000011",
         "TREE_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 84,
-      "sourceCharacters": 3398
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q4-hierarchy"
+      ]
     },
     {
-      "id": "xplan-q5-json",
       "file": "xplan-q5-json.txt",
       "kind": "xplan",
-      "caseId": "q5-json",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "PROFILE_JSON_SECRET",
@@ -328,16 +360,19 @@
         "a00000000000c",
         "8000000012"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 30,
-      "sourceCharacters": 1864
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q5-json"
+      ]
     },
     {
-      "id": "xplan-q6-cte-union",
       "file": "xplan-q6-cte-union.txt",
       "kind": "xplan",
-      "caseId": "q6-cte-union",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -354,16 +389,19 @@
         "VIP_PRIVATE",
         "SET_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 105,
-      "sourceCharacters": 4479
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q6-cte-union"
+      ]
     },
     {
-      "id": "xplan-q7-parallel",
       "file": "xplan-q7-parallel.txt",
       "kind": "xplan",
-      "caseId": "q7-parallel",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
@@ -374,16 +412,19 @@
         "a00000000000e",
         "8000000014"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 42,
-      "sourceCharacters": 2118
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q7-parallel"
+      ]
     },
     {
-      "id": "monitor-q7-parallel-all",
       "file": "monitor-q7-parallel-all.txt",
       "kind": "sql_monitor",
-      "caseId": "q7-parallel",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
@@ -401,23 +442,26 @@
         "LAB_PROGRAM_PRIVATE",
         "LAB_HOST_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .005818s",
+        "Duration            :  .00699s",
         "Fetch Calls         :  1"
       ],
       "minOccurrences": 25,
-      "sourceCharacters": 2530
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q7-parallel"
+      ]
     },
     {
-      "id": "xplan-q8-bind",
       "file": "xplan-q8-bind.txt",
       "kind": "xplan",
-      "caseId": "q8-bind",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -432,16 +476,19 @@
         "8000000016",
         "POB_REGION_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 27,
-      "sourceCharacters": 1875
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q8-bind"
+      ]
     },
     {
-      "id": "monitor-q8-bind-all",
       "file": "monitor-q8-bind-all.txt",
       "kind": "sql_monitor",
-      "caseId": "q8-bind",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -463,23 +510,26 @@
         "LAB_HOST_PRIVATE",
         "POB_REGION_PRIVATE"
       ],
-      "mustKeep": [
+      "keep": [
         "Status              :  DONE (ALL ROWS)",
         "Execution Started   :  10/12/2026 12:00:00",
         "First Refresh Time  :  10/12/2026 12:00:00",
         "Last Refresh Time   :  10/12/2026 12:00:01",
-        "Duration            :  .004301s",
+        "Duration            :  .003523s",
         "Fetch Calls         :  1"
       ],
       "minOccurrences": 24,
-      "sourceCharacters": 3165
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q8-bind"
+      ]
     },
     {
-      "id": "xplan-q9-pivot",
       "file": "xplan-q9-pivot.txt",
       "kind": "xplan",
-      "caseId": "q9-pivot",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "REGION_CODE_SECRET",
@@ -495,29 +545,35 @@
         "8000000018",
         "ARCHIVED_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 71,
-      "sourceCharacters": 2980
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "q9-pivot"
+      ]
     },
     {
-      "id": "xplan-dml-insert",
       "file": "xplan-dml-insert.txt",
       "kind": "xplan",
-      "caseId": "pob_ins",
-      "mustMask": [
+      "replace": [
         "POB_CUSTOMERS_SECRET",
         "8000000019"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 6,
-      "sourceCharacters": 827
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "pob_ins"
+      ]
     },
     {
-      "id": "xplan-dml-update",
       "file": "xplan-dml-update.txt",
       "kind": "xplan",
-      "caseId": "pob_upd",
-      "mustMask": [
+      "replace": [
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
         "AMOUNT_SECRET",
@@ -525,16 +581,19 @@
         "CONFIDENTIAL_OPEN",
         "8000000020"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 29,
-      "sourceCharacters": 1670
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "pob_upd"
+      ]
     },
     {
-      "id": "xplan-dml-delete",
       "file": "xplan-dml-delete.txt",
       "kind": "xplan",
-      "caseId": "pob_del",
-      "mustMask": [
+      "replace": [
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -544,16 +603,19 @@
         "DELETE_REGION_PRIVATE",
         "8000000021"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 29,
-      "sourceCharacters": 1726
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "pob_del"
+      ]
     },
     {
-      "id": "xplan-dml-merge",
       "file": "xplan-dml-merge.txt",
       "kind": "xplan",
-      "caseId": "pob_mrg",
-      "mustMask": [
+      "replace": [
         "POB_CUSTOMERS_SECRET",
         "CUSTOMER_ID_SECRET",
         "CUSTOMER_NAME_SECRET",
@@ -563,16 +625,19 @@
         "8000000022",
         "PK_POB_CUSTOMERS_SECRET"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 61,
-      "sourceCharacters": 2764
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "pob_mrg"
+      ]
     },
     {
-      "id": "xplan-remote",
       "file": "xplan-remote.txt",
       "kind": "xplan",
-      "caseId": "pob_rem",
-      "mustMask": [
+      "replace": [
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
         "AMOUNT_SECRET",
@@ -580,17 +645,19 @@
         "8000000023",
         "LAB_INSTANCE_PRIVATE"
       ],
-      "mustKeep": [],
+      "keep": [],
       "minOccurrences": 14,
-      "sourceCharacters": 1583
-    }
-  ],
-  "sqlCases": [
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "pob_rem"
+      ]
+    },
     {
-      "id": "sql-q1-index",
       "file": "sql-q1-index.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -601,14 +668,19 @@
         "SIBERIA_PRIVATE",
         "POB_CASE_Q1_INDEX"
       ],
+      "keep": [],
       "minOccurrences": 19,
-      "sourceCharacters": 320
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q2-join",
       "file": "sql-q2-join.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -621,14 +693,19 @@
         "PRIVATE_AMOUNT_SUM",
         "POB_CASE_Q2_JOIN"
       ],
+      "keep": [],
       "minOccurrences": 25,
-      "sourceCharacters": 391
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q3-partition-window",
       "file": "sql-q3-partition-window.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -640,14 +717,19 @@
         "NOTE_PRIVATE",
         "POB_CASE_Q3_PARTITION"
       ],
+      "keep": [],
       "minOccurrences": 25,
-      "sourceCharacters": 496
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q4-hierarchy",
       "file": "sql-q4-hierarchy.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORG_SECRET",
         "NODE_ID_SECRET",
@@ -657,14 +739,19 @@
         "ROOT_PRIVATE",
         "POB_CASE_Q4_HIERARCHY"
       ],
+      "keep": [],
       "minOccurrences": 19,
-      "sourceCharacters": 336
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q5-json",
       "file": "sql-q5-json.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "PROFILE_JSON_SECRET",
@@ -675,14 +762,19 @@
         "$.tenant",
         "POB_CASE_Q5_JSON"
       ],
+      "keep": [],
       "minOccurrences": 13,
-      "sourceCharacters": 277
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q6-cte-union",
       "file": "sql-q6-cte-union.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "POB_ORDERS_SECRET",
@@ -696,14 +788,19 @@
         "POB_CASE_Q6_CTE_UNION",
         "VIP_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 31,
-      "sourceCharacters": 549
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q7-parallel",
       "file": "sql-q7-parallel.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
@@ -712,14 +809,19 @@
         "PARALLEL_PRIVATE",
         "POB_CASE_Q7_PARALLEL"
       ],
+      "keep": [],
       "minOccurrences": 16,
-      "sourceCharacters": 264
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q8-bind",
       "file": "sql-q8-bind.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "IX_POB_STATUS_SECRET",
@@ -730,14 +832,19 @@
         "pob_region_private",
         "POB_CASE_Q8_BIND"
       ],
+      "keep": [],
       "minOccurrences": 13,
-      "sourceCharacters": 260
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-q9-pivot",
       "file": "sql-q9-pivot.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "REGION_CODE_SECRET",
@@ -751,14 +858,19 @@
         "POB_CASE_Q9_PIVOT",
         "ARCHIVED_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 21,
-      "sourceCharacters": 411
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-dml-insert",
       "file": "sql-dml-insert.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -771,14 +883,19 @@
         "INSERT_STATUS_PRIVATE",
         "INSERT_SEGMENT_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 13,
-      "sourceCharacters": 301
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-dml-update",
       "file": "sql-dml-update.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
@@ -787,14 +904,19 @@
         "UPDATE_PRIVATE",
         "CONFIDENTIAL_OPEN"
       ],
+      "keep": [],
       "minOccurrences": 12,
-      "sourceCharacters": 159
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-dml-delete",
       "file": "sql-dml-delete.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "REGION_CODE_SECRET",
@@ -802,14 +924,19 @@
         "DELETE_PRIVATE",
         "DELETE_REGION_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 9,
-      "sourceCharacters": 142
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-dml-merge",
       "file": "sql-dml-merge.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_CUSTOMERS_SECRET",
         "CUSTOMER_ID_SECRET",
@@ -822,14 +949,19 @@
         "MERGE_STATUS_PRIVATE",
         "MERGE_SEGMENT_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 29,
-      "sourceCharacters": 594
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-remote",
       "file": "sql-remote.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "STATUS_SECRET",
@@ -839,14 +971,19 @@
         "POB_LINK_SECRET",
         "remote_private"
       ],
+      "keep": [],
       "minOccurrences": 12,
-      "sourceCharacters": 253
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-ddl-create-table",
       "file": "sql-ddl-create-table.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "DDL_TABLE_SECRET",
         "ID_SECRET",
@@ -854,53 +991,73 @@
         "CREATED_PRIVATE",
         "PK_DDL_TABLE_SECRET"
       ],
+      "keep": [],
       "minOccurrences": 10,
-      "sourceCharacters": 214
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-ddl-create-index",
       "file": "sql-ddl-create-index.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "IX_DDL_PAYLOAD_SECRET",
         "DDL_TABLE_SECRET",
         "PAYLOAD_PRIVATE",
         "CREATED_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 5,
-      "sourceCharacters": 113
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-ddl-alter-table",
       "file": "sql-ddl-alter-table.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "DDL_TABLE_SECRET",
         "CK_DDL_PRIVATE",
         "PAYLOAD_PRIVATE",
         "DDL_VALUE_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 5,
-      "sourceCharacters": 124
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-ddl-drop-table",
       "file": "sql-ddl-drop-table.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "DDL_TABLE_SECRET"
       ],
+      "keep": [],
       "minOccurrences": 2,
-      "sourceCharacters": 46
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     },
     {
-      "id": "sql-plsql-block",
       "file": "sql-plsql-block.sql",
       "kind": "sql",
-      "mustMask": [
+      "replace": [
         "LAB_SCHEMA01",
         "POB_ORDERS_SECRET",
         "ORDER_ID_SECRET",
@@ -908,8 +1065,14 @@
         "L_VALUE_PRIVATE",
         "PLSQL_VALUE_PRIVATE"
       ],
+      "keep": [],
       "minOccurrences": 9,
-      "sourceCharacters": 212
+      "allowFindings": [],
+      "tags": [
+        "generated",
+        "oracle-21c",
+        "sql"
+      ]
     }
   ]
 }

@@ -14,7 +14,7 @@ Global Information
  Execution Started   :  10/12/2026 12:00:00
  First Refresh Time  :  10/12/2026 12:00:00
  Last Refresh Time   :  10/12/2026 12:00:01
- Duration            :  .017572s
+ Duration            :  .037214s
  Module/Action       :  LAB_MODULE_PRIVATE/LAB_ACTION_PRIVATE
  Service             :  LAB_SERVICE_PRIVATE
  Program             :  LAB_PROGRAM_PRIVATE@LAB_HOST_PRIVATE
@@ -25,7 +25,7 @@ Global Stats
 | Elapsed |   Cpu   |  Other   | Fetch | Buffer |
 | Time(s) | Time(s) | Waits(s) | Calls |  Gets  |
 =================================================
-|    0.02 |    0.02 |     0.00 |     1 |    210 |
+|    0.04 |    0.01 |     0.02 |     1 |    210 |
 =================================================
 
 SQL Plan Monitoring Details (Plan Hash Value=8000000010)

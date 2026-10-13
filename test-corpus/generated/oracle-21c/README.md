@@ -12,7 +12,7 @@
   временный loopback database link;
 - SQL Monitor TEXT уровней BASIC, TYPICAL и ALL;
 - исходные SQL каждого сценария;
-- `manifest.json` с независимыми `mustMask`, `mustKeep` и structural thresholds.
+- `expectations.json` с независимыми `replace`, `keep` и structural thresholds.
 
 Динамические SQL ID, plan hash, session, module, service, program и host
 нормализованы в стабильные синтетические значения. Отчёты можно пересоздать:

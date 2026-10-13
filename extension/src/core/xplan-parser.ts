@@ -268,11 +268,27 @@ function parsePredicateSection(artifact: ParsedArtifact, start: number, end: num
 function parsePeekedBinds(artifact: ParsedArtifact, start: number, end: number): void {
   const fragment = artifact.sourceText.slice(start, end);
   for (const line of linesWithOffsets(fragment)) {
+    const leadingBind = line.text.match(/^\s*\d+\s*-\s*:([\p{L}\p{N}_$#]+)/u);
+    if (leadingBind) {
+      const bind = leadingBind[1] ?? "";
+      const bindStart = start + line.offset + (leadingBind.index ?? 0) + leadingBind[0].indexOf(bind);
+      addOccurrence(
+        artifact,
+        makeOccurrence(
+          artifact.sourceText,
+          bindStart,
+          bindStart + bind.length,
+          EntityType.Bind,
+          "xplan_peeked_bind",
+          { canonical: canonicalValue(EntityType.Bind, bind), quotingContext: "bind" }
+        )
+      );
+    }
     const valueMatch = line.text.match(/\)\s*:\s*(.+?)\s*(?:\r?\n)?$/u);
     if (!valueMatch) continue;
     const prefix = line.text.slice(0, valueMatch.index ?? 0);
     const bindMatch = prefix.match(/:([\p{L}\p{N}_$#]+)/u);
-    if (bindMatch) {
+    if (bindMatch && !leadingBind) {
       const bind = bindMatch[1] ?? "";
       const bindStart = start + line.offset + (bindMatch.index ?? 0) + 1;
       addOccurrence(

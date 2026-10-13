@@ -1,0 +1,119 @@
+{
+  "$schema": "../corpus.schema.json",
+  "schemaVersion": 1,
+  "suite": "canonical",
+  "source": "Hand-maintained Oracle 19c and synthetic regression fixtures",
+  "cases": [
+    {
+      "file": "sql/query.sql",
+      "kind": "sql",
+      "replace": [
+        "sales",
+        "orders",
+        "crm",
+        "customers",
+        "order_id",
+        "customer_name",
+        "customer_id",
+        "OPEN",
+        "2026-01-01",
+        "region"
+      ],
+      "keep": ["MONITOR", "GATHER_PLAN_STATISTICS"],
+      "minOccurrences": 10,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "sql", "basic"]
+    },
+    {
+      "file": "sql/oracle-edge.sql",
+      "kind": "sql",
+      "replace": [
+        "Recent Orders",
+        "Order ID",
+        "Sales",
+        "Orders",
+        "crm",
+        "customers",
+        "prod_link",
+        "private status",
+        "Конфиденциально",
+        "region"
+      ],
+      "keep": ["TIMESTAMP", "(+)", "INDEX"],
+      "minOccurrences": 20,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "sql", "edge-cases"]
+    },
+    {
+      "file": "xplan/xplan_19c.txt",
+      "kind": "xplan",
+      "replace": [
+        "7ab12cd34ef56",
+        "3829104756",
+        "ORDERS",
+        "IX_ORDERS_STATUS",
+        "REGION",
+        "SIBERIA",
+        "SALES_PROFILE"
+      ],
+      "keep": ["00:00:12", "87500"],
+      "minOccurrences": 50,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "xplan", "allstats"]
+    },
+    {
+      "file": "xplan/xplan_parallel_synthetic.txt",
+      "kind": "xplan",
+      "replace": [
+        "p4r4ll3l00001",
+        "7654321098",
+        "EMP_PRIVATE",
+        "DEPT_PRIVATE",
+        "TQ10001",
+        "TQ10000",
+        "SEL$PARALLEL_PRIVATE"
+      ],
+      "keep": ["Q1,01", "P->S", "PCWP", "445"],
+      "minOccurrences": 20,
+      "allowFindings": [],
+      "tags": ["synthetic", "xplan", "parallel", "px"]
+    },
+    {
+      "file": "sql-monitor/sql_monitor_19c.txt",
+      "kind": "sql_monitor",
+      "replace": [
+        "REPORT_USER",
+        "7ab12cd34ef56",
+        "16777216",
+        "report-worker@prod-db-01/monthly-close",
+        "sales_prod",
+        "ORDERS",
+        "IX_ORDERS_STATUS",
+        "REGION",
+        "SIBERIA"
+      ],
+      "keep": ["12.01", "98765", "Status              :  DONE (ALL ROWS)"],
+      "minOccurrences": 20,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "sql-monitor", "all"]
+    },
+    {
+      "file": "outline/outline.txt",
+      "kind": "outline",
+      "replace": ["SEL$1", "SALES", "IX_ORDERS_STATUS"],
+      "keep": ["BEGIN_OUTLINE_DATA", "INDEX_RS_ASC", "LEADING", "END_OUTLINE_DATA"],
+      "minOccurrences": 5,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "outline"]
+    },
+    {
+      "file": "predicates/predicates.txt",
+      "kind": "predicates",
+      "replace": ["CUSTOMER_ID", "STATUS", "OPEN", "AMOUNT", "1000"],
+      "keep": ["access", "filter"],
+      "minOccurrences": 5,
+      "allowFindings": [],
+      "tags": ["oracle-19c", "predicates"]
+    }
+  ]
+}

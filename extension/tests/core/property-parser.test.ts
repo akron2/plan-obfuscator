@@ -1,10 +1,10 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
 import { parseArtifact, parsePrompt } from "../../src/core/parser";
 import { createConversationMapping } from "../../src/core/symbol-registry";
 import { obfuscatePrompt, restoreExact } from "../../src/core/transform";
+import { ArtifactKind } from "../../src/core/types";
+import { corpusCases } from "../helpers/corpus";
 
 const identifierSuffix = fc.stringMatching(/^[A-Z][A-Z0-9_]{0,15}$/);
 const valueSuffix = fc.string({ minLength: 1, maxLength: 30 })
@@ -86,14 +86,10 @@ describe("parser generative invariants", () => {
   });
 
   it("keeps golden secrets protected after line-ending and spacing mutations", () => {
-    const corpusDirectory = resolve(import.meta.dirname, "../../../test-corpus/oracle-live-21c");
-    const manifest = JSON.parse(
-      readFileSync(resolve(corpusDirectory, "manifest.json"), "utf8")
-    ) as { artifacts: Array<{ id: string; file: string; mustMask: string[]; mustKeep?: string[] }> };
-    const cases = manifest.artifacts.map((item) => ({
-      ...item,
-      source: readFileSync(resolve(corpusDirectory, item.file), "utf8").trimEnd()
-    }));
+    const cases = corpusCases.filter((item) =>
+      item.suite === "generated-oracle-21c" &&
+      [ArtifactKind.Xplan, ArtifactKind.SqlMonitor].includes(item.expectedKind as ArtifactKind)
+    );
     fc.assert(
       fc.property(
         fc.constantFrom(...cases),
@@ -108,10 +104,10 @@ describe("parser generative invariants", () => {
             source,
             createConversationMapping("property", item.id, "PRP003")
           );
-          for (const secret of item.mustMask.filter((value) => source.includes(value))) {
+          for (const secret of item.replace.filter((value) => source.includes(value))) {
             expect(result.text, `mutated report leaked: ${secret}`).not.toContain(secret);
           }
-          for (const safeValue of item.mustKeep ?? []) {
+          for (const safeValue of item.keep) {
             expect(result.text, `mutated report changed safe field: ${safeValue}`).toContain(safeValue);
           }
           expect(restoreExact(result)).toBe(source);
@@ -122,13 +118,9 @@ describe("parser generative invariants", () => {
   });
 
   it("parses the complete committed report matrix within a regression budget", () => {
-    const corpusDirectory = resolve(import.meta.dirname, "../../../test-corpus/oracle-live-21c");
-    const manifest = JSON.parse(
-      readFileSync(resolve(corpusDirectory, "manifest.json"), "utf8")
-    ) as { artifacts: Array<{ file: string }> };
-    const sources = manifest.artifacts.map((item) =>
-      readFileSync(resolve(corpusDirectory, item.file), "utf8")
-    );
+    const sources = corpusCases
+      .filter((item) => item.suite === "generated-oracle-21c" && item.expectedKind !== ArtifactKind.Sql)
+      .map((item) => item.source);
     const started = performance.now();
     for (let iteration = 0; iteration < 20; iteration += 1) {
       for (const source of sources) parseArtifact(source);
