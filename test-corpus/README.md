@@ -1,6 +1,6 @@
 # Oracle parser corpus
 
-Corpus является контрактом TypeScript parser и содержит только синтетические
+Corpus является контрактом Python parser и содержит только синтетические
 или заранее обезличенные данные.
 
 Структура:
@@ -26,7 +26,7 @@ findings и tags. Файл строго проверяется по `corpus.sche
 Запуск только corpus tests:
 
 ```powershell
-npm run test:corpus
+.\.venv\Scripts\python.exe -m pytest tests/test_corpus.py tests/test_corpus_loader.py
 ```
 
 `canonical/xplan/xplan_parallel_synthetic.txt` воспроизводит documented PX/TQ

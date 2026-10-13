@@ -3,6 +3,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .ruff_cache/
+.hypothesis/
 .coverage
 htmlcov/
 build/
@@ -11,9 +12,13 @@ dist/
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 node_modules/
+experimental/chrome-extension/dist/
+experimental/chrome-extension/coverage/
 extension/dist/
 extension/coverage/
 release/
+.playwright-mcp/
 *.tsbuildinfo
 .DS_Store

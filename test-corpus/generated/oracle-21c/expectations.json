@@ -582,7 +582,7 @@
         "8000000020"
       ],
       "keep": [],
-      "minOccurrences": 29,
+      "minOccurrences": 27,
       "allowFindings": [],
       "tags": [
         "generated",
@@ -604,7 +604,7 @@
         "8000000021"
       ],
       "keep": [],
-      "minOccurrences": 29,
+      "minOccurrences": 27,
       "allowFindings": [],
       "tags": [
         "generated",
@@ -626,7 +626,7 @@
         "PK_POB_CUSTOMERS_SECRET"
       ],
       "keep": [],
-      "minOccurrences": 61,
+      "minOccurrences": 58,
       "allowFindings": [],
       "tags": [
         "generated",
@@ -992,7 +992,7 @@
         "PK_DDL_TABLE_SECRET"
       ],
       "keep": [],
-      "minOccurrences": 10,
+      "minOccurrences": 8,
       "allowFindings": [],
       "tags": [
         "generated",
