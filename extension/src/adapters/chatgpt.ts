@@ -11,15 +11,34 @@ import type { SiteAdapter } from "./site-adapter";
 
 const COMPOSER_SELECTORS = [
   "#prompt-textarea",
+  "textarea#mobile-composer-prompt",
+  "textarea[data-mobile-composer-prompt]",
+  "textarea[name='prompt'][aria-label]",
   "textarea[data-testid='prompt-textarea']",
   "div[contenteditable='true'][data-lexical-editor='true']",
   "form div[contenteditable='true']"
 ] as const;
 const SEND_SELECTORS = [
   "button[data-testid='send-button']",
-  "form button[aria-label*='Send' i]",
-  "form button[aria-label*='Отправ' i]"
+  "button[data-composer-submit]",
+  "button[type='submit'][aria-label*='Send' i]",
+  "button[type='submit'][aria-label*='Отправ' i]",
+  "button[type='submit']"
 ] as const;
+
+function firstRenderedComposer(document: Document): HTMLElement | null {
+  const candidates = uniqueElements(document, COMPOSER_SELECTORS);
+  return (
+    candidates.find((element) => {
+      if (element.hidden || element.getAttribute("aria-hidden") === "true") return false;
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }) ??
+    candidates.find((element) => !element.hidden && element.getAttribute("aria-hidden") !== "true") ??
+    candidates[0] ??
+    null
+  );
+}
 
 export class ChatGptAdapter implements SiteAdapter {
   readonly id = "chatgpt" as const;
@@ -34,11 +53,13 @@ export class ChatGptAdapter implements SiteAdapter {
   }
 
   findComposer(document: Document): HTMLElement | null {
-    return firstElement(document, COMPOSER_SELECTORS);
+    return firstRenderedComposer(document);
   }
 
   findSendControl(document: Document): HTMLElement | null {
-    return firstElement(document, SEND_SELECTORS);
+    const composer = this.findComposer(document);
+    const form = composer?.closest("form");
+    return firstElement(form ?? document, SEND_SELECTORS);
   }
 
   writeComposerText(composer: HTMLElement, text: string): void {

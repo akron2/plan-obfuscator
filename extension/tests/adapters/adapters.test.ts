@@ -37,6 +37,41 @@ describe("site adapters", () => {
     expect(adapter.isStreaming(document)).toBe(true);
   });
 
+  it("supports the current ChatGPT mobile composer DOM and prefers the rendered editor", () => {
+    document.body.innerHTML = `
+      <form data-desktop-composer hidden>
+        <div id="prompt-textarea" contenteditable="true"></div>
+        <button type="submit" data-testid="send-button">Send</button>
+      </form>
+      <form data-mobile-composer>
+        <textarea
+          id="mobile-composer-prompt"
+          data-mobile-composer-prompt
+          name="prompt"
+          aria-label="Чат с ChatGPT"
+        ></textarea>
+        <button type="submit" data-composer-submit aria-label="Отправить сообщение"></button>
+      </form>`;
+    const mobile = document.querySelector<HTMLTextAreaElement>("#mobile-composer-prompt")!;
+    mobile.getBoundingClientRect = () => ({
+      x: 20,
+      y: 400,
+      left: 20,
+      top: 400,
+      right: 620,
+      bottom: 424,
+      width: 600,
+      height: 24,
+      toJSON: () => ({})
+    });
+
+    const adapter = new ChatGptAdapter();
+    expect(adapter.findComposer(document)).toBe(mobile);
+    expect(adapter.findSendControl(document)?.hasAttribute("data-composer-submit")).toBe(true);
+    adapter.writeComposerText(mobile, "safe mobile text");
+    expect(mobile.value).toBe("safe mobile text");
+  });
+
   it("drives a Claude DOM fixture and textarea fallback", () => {
     document.body.innerHTML = `
       <fieldset><div class="ProseMirror" contenteditable="true" role="textbox"></div></fieldset>

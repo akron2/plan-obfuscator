@@ -1,6 +1,6 @@
 {
   "name": "plan-obfuscator",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "description": "Self-contained Oracle plan obfuscation Chrome extension",
   "workspaces": [

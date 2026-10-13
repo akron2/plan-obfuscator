@@ -69,6 +69,7 @@ describe("content integration shell", () => {
     expect(frame.style.width).toBe("700px");
     expect(composer.classList.contains("plan-obfuscator-native-concealed")).toBe(true);
     expect(composer.getAttribute("tabindex")).toBe("-1");
+    expect(document.querySelector<HTMLButtonElement>("#plan-obfuscator-launcher")?.hidden).toBe(true);
   });
 
   it("writes only the safe frame payload and clears it when the draft becomes dirty", () => {
@@ -114,5 +115,23 @@ describe("content integration shell", () => {
       conversationId: "conversation-1",
       composerFound: true
     });
+  });
+
+  it("shows a working fallback launcher instead of disappearing when the site DOM changes", async () => {
+    document.querySelector("form")!.remove();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const launcher = document.querySelector<HTMLButtonElement>("#plan-obfuscator-launcher")!;
+    expect(launcher).toBeTruthy();
+    expect(launcher.hidden).toBe(false);
+    expect(launcher.textContent).toContain("Обфусцировать");
+
+    launcher.click();
+    const frame = document.querySelector<HTMLIFrameElement>("#plan-obfuscator-secure-composer")!;
+    expect(frame).toBeTruthy();
+    expect(frame.classList.contains("plan-obfuscator-fallback-frame")).toBe(true);
+    expect(frame.style.right).toBe("16px");
+    expect(frame.style.bottom).toBe("68px");
+    expect(launcher.getAttribute("aria-expanded")).toBe("true");
   });
 });

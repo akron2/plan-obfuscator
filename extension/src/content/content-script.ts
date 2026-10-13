@@ -8,6 +8,8 @@ import { markerCount } from "../core/transform";
 import type { ExtensionSettings, SendGuardMode } from "../core/types";
 
 const FRAME_ID = "plan-obfuscator-secure-composer";
+const LAUNCHER_ID = "plan-obfuscator-launcher";
+const FALLBACK_FRAME_CLASS = "plan-obfuscator-fallback-frame";
 const RESTORED_CLASS = "plan-obfuscator-restored-frame";
 const NATIVE_CLASS = "plan-obfuscator-native-concealed";
 
@@ -35,6 +37,8 @@ export class ExtensionIntegration {
   private settings: ExtensionSettings | null = null;
   private composer: HTMLElement | null = null;
   private frame: HTMLIFrameElement | null = null;
+  private launcher: HTMLButtonElement | null = null;
+  private fallbackOpen = false;
   private observer: MutationObserver | null = null;
   private adapter: SiteAdapter;
   private conversationId = "";
@@ -73,11 +77,12 @@ export class ExtensionIntegration {
     this.responseTimer = null;
     this.navigationTimer = null;
     this.unmountComposer();
+    this.removeLauncher();
   }
 
   private installListeners(): void {
     window.addEventListener("message", (event) => void this.onFrameMessage(event));
-    window.addEventListener("resize", () => this.positionFrame(), { passive: true });
+    window.addEventListener("resize", () => this.queueRefresh(), { passive: true });
     window.addEventListener("scroll", () => this.positionFrame(), { passive: true, capture: true });
     document.addEventListener("click", (event) => this.guardSend(event), true);
     document.addEventListener("submit", (event) => this.guardSend(event), true);
@@ -154,9 +159,11 @@ export class ExtensionIntegration {
     this.checkNavigation();
     if (!this.settings || !siteEnabled(this.settings, this.adapter.id)) {
       this.unmountComposer();
+      this.removeLauncher();
       this.clearRestoredViews();
       return;
     }
+    this.ensureLauncher();
     if (!this.settings.hideOriginal) {
       for (const element of document.querySelectorAll(".plan-obfuscator-original-hidden")) {
         element.classList.remove("plan-obfuscator-original-hidden");
@@ -164,20 +171,77 @@ export class ExtensionIntegration {
     }
     if (!this.settings.autoRestore) this.clearRestoredViews();
     const found = this.adapter.findComposer(document);
-    if (found && found !== this.composer) this.attachComposer(found);
-    if (this.composer && !this.composer.isConnected) this.unmountComposer();
+    if (found && this.composerIsUsable(found) && found !== this.composer) {
+      this.attachComposer(found);
+    }
+    if (this.composer && (!this.composer.isConnected || !this.composerIsUsable(this.composer))) {
+      this.restoreNativeComposer();
+      if (!this.fallbackOpen) this.removeFrame();
+    }
+    if (this.composer?.isConnected) this.ensureFrame();
+    this.updateLauncher();
     this.positionFrame();
     if (this.settings.autoRestore) this.scheduleResponseScan();
   }
 
+  private composerIsUsable(composer: HTMLElement): boolean {
+    const rect = composer.getBoundingClientRect();
+    return rect.width >= 80 && rect.height >= 20;
+  }
+
   private attachComposer(composer: HTMLElement): void {
     this.restoreNativeComposer();
+    this.fallbackOpen = false;
     this.composer = composer;
     composer.classList.add(NATIVE_CLASS);
     composer.dataset.planObfuscatorOriginalTabindex = composer.getAttribute("tabindex") ?? "";
     composer.setAttribute("tabindex", "-1");
     this.ensureFrame();
+    this.updateLauncher();
     this.positionFrame();
+  }
+
+  private ensureLauncher(): void {
+    if (this.launcher?.isConnected) return;
+    const launcher = document.createElement("button");
+    launcher.id = LAUNCHER_ID;
+    launcher.type = "button";
+    launcher.textContent = "🛡 Обфусцировать";
+    launcher.title = "Открыть защищённый редактор Plan Obfuscator";
+    launcher.setAttribute("aria-controls", FRAME_ID);
+    launcher.setAttribute("aria-expanded", "false");
+    launcher.addEventListener("click", () => this.toggleFallback());
+    (document.body ?? document.documentElement).append(launcher);
+    this.launcher = launcher;
+  }
+
+  private updateLauncher(): void {
+    if (!this.launcher) return;
+    const composerAttached = Boolean(this.composer?.isConnected);
+    const label = this.fallbackOpen ? "× Закрыть" : "🛡 Обфусцировать";
+    const expanded = String(this.fallbackOpen);
+    if (this.launcher.hidden !== composerAttached) this.launcher.hidden = composerAttached;
+    if (this.launcher.textContent !== label) this.launcher.textContent = label;
+    if (this.launcher.getAttribute("aria-expanded") !== expanded) {
+      this.launcher.setAttribute("aria-expanded", expanded);
+    }
+  }
+
+  private toggleFallback(): void {
+    if (this.composer?.isConnected) {
+      this.frame?.focus({ preventScroll: false });
+      return;
+    }
+    this.fallbackOpen = !this.fallbackOpen;
+    if (this.fallbackOpen) this.ensureFrame();
+    else this.removeFrame();
+    this.updateLauncher();
+    this.positionFrame();
+  }
+
+  private removeLauncher(): void {
+    this.launcher?.remove();
+    this.launcher = null;
   }
 
   private ensureFrame(): void {
@@ -190,6 +254,11 @@ export class ExtensionIntegration {
     frame.addEventListener("load", () => this.configureFrame());
     (document.body ?? document.documentElement).append(frame);
     this.frame = frame;
+  }
+
+  private removeFrame(): void {
+    this.frame?.remove();
+    this.frame = null;
   }
 
   private configureFrame(): void {
@@ -214,7 +283,25 @@ export class ExtensionIntegration {
   }
 
   private positionFrame(): void {
-    if (!this.frame || !this.composer || !this.composer.isConnected) return;
+    if (!this.frame) return;
+    if (!this.composer?.isConnected) {
+      if (!this.fallbackOpen) {
+        this.frame.style.display = "none";
+        return;
+      }
+      this.frame.classList.add(FALLBACK_FRAME_CLASS);
+      this.frame.style.display = "block";
+      this.frame.style.left = "auto";
+      this.frame.style.top = "auto";
+      this.frame.style.right = "16px";
+      this.frame.style.bottom = "68px";
+      this.frame.style.width = "min(680px, calc(100vw - 32px))";
+      this.frame.style.height = "180px";
+      return;
+    }
+    this.frame.classList.remove(FALLBACK_FRAME_CLASS);
+    this.frame.style.right = "auto";
+    this.frame.style.bottom = "auto";
     const rect = this.composer.getBoundingClientRect();
     if (rect.width < 80 || rect.height < 24) {
       this.frame.style.display = "none";
@@ -239,8 +326,8 @@ export class ExtensionIntegration {
 
   private unmountComposer(): void {
     this.restoreNativeComposer();
-    this.frame?.remove();
-    this.frame = null;
+    this.removeFrame();
+    this.fallbackOpen = false;
   }
 
   private clearRestoredViews(): void {

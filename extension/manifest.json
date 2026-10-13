@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Plan Obfuscator",
   "description": "Locally obfuscate Oracle SQL and execution diagnostics before sending them to AI chats.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minimum_chrome_version": "114",
   "incognito": "not_allowed",
   "permissions": ["storage"],

@@ -1,7 +1,7 @@
 # Архитектура: Plan Obfuscator Chrome Extension
 
 Статус: реализовано и проверено
-Дата фиксации: 2026-10-12
+Дата фиксации: 2026-10-13
 
 ## Статус реализации
 
@@ -12,11 +12,13 @@
 Проверено 2026-10-12:
 
 - strict TypeScript compilation;
-- 105 unit/integration tests для lexer/parser, exact restore, storage, service
+- 108 unit/integration tests для lexer/parser, exact restore, storage, service
   worker protocol, content integration и DOM adapters;
-- coverage: 89.7% statements, 78.2% branches, 92.3% lines, 94.0% functions;
+- coverage: 89.8% statements, 78.6% branches, 92.3% lines, 94.1% functions;
 - Manifest V3 permission/remote-code audit;
 - Chrome headless load-unpacked smoke без manifest/runtime ошибок;
+- собранный content bundle проверен на актуальном публичном DOM ChatGPT:
+  `textarea#mobile-composer-prompt` найден, скрыт и накрыт защищённым iframe;
 - live Docker Oracle smoke: ~39k DBMS_XPLAN и ~14k SQL Monitor TEXT обработаны
   за 117 ms, spans корректны, SQL извлечён, parser findings отсутствуют, exact
   round-trip подтверждён;
@@ -42,8 +44,9 @@ Plan Obfuscator становится самодостаточным Chrome Exten
 1. Plaintext prompt вводится в extension-origin composer iframe и недоступен
    JavaScript страницы.
 2. В штатный composer ChatGPT/Claude записывается только обфусцированный текст.
-3. Пользователь явно запускает преобразование плавающей кнопкой и самостоятельно
-   нажимает штатный Send.
+3. Пользователь явно запускает преобразование кнопкой защищённого редактора и
+   самостоятельно нажимает штатный Send; при отказе adapter остаётся видимый
+   плавающий fallback launcher.
 4. Необфусцированный Oracle-текст перед отправкой обрабатывается согласно
    настройке `block`, `warn` или `off`; default — `block`.
 5. Ответ модели автоматически восстанавливается после завершения streaming.
@@ -125,6 +128,13 @@ MV3 Service Worker
 Content script находит штатный editable element и размещает над его текстовой
 областью web-accessible extension iframe. Штатный editable остаётся в layout, но
 не принимает пользовательский plaintext.
+
+Если adapter не находит пригодный видимый editable, content script не исчезает:
+он показывает фиксированную кнопку `Обфусцировать` в правом нижнем углу. Кнопка
+открывает тот же extension-origin composer как отдельную fallback-панель. В этом
+режиме безопасный OBF-результат можно скопировать отдельной кнопкой. При появлении
+поддерживаемого штатного composer iframe автоматически возвращается в режим
+overlay.
 
 Пользователь вводит prompt внутри iframe. Iframe отправляет plaintext напрямую
 service worker через `chrome.runtime.sendMessage`. После обфускации iframe
@@ -261,8 +271,9 @@ SiteAdapter
 ```
 
 `ChatGPTAdapter` и `ClaudeAdapter` имеют независимые selector sets и DOM fixture
-tests. Adapter не найден или не уверен — extension переходит в fail-safe disabled
-state и ничего не отправляет.
+tests. Adapter выбирает отображаемый editor среди desktop/mobile вариантов и
+ищет Send внутри связанной формы. Adapter не найден или не уверен — extension
+переходит в видимый fail-safe fallback и ничего не отправляет в страницу.
 
 ### Popup settings
 
@@ -380,7 +391,8 @@ plaintext. Используется cross-origin extension document.
 Основные технические риски:
 
 - DOM selectors ChatGPT/Claude меняются; mitigation — независимые adapters,
-  heuristic fallback, fixture tests и явный disabled state.
+  выбор отображаемого editor, fixture tests актуальных desktop/mobile вариантов
+  и всегда видимый fallback launcher.
 - Framework-controlled composer может отвергать programmatic changes; adapter
   должен использовать native setter/contenteditable path и trusted-like input
   event sequence.
@@ -533,8 +545,9 @@ fixtures. TypeScript tests не запускают Python и не зависят
 - service worker message contract and storage migrations;
 - conversation provisional-to-stable migration;
 - concurrent symbol allocation;
-- ChatGPT and Claude adapter DOM fixtures;
+- ChatGPT and Claude adapter DOM fixtures, включая актуальный mobile composer;
 - composer protection states and send guard modes;
+- fallback launcher и восстановление UI при неизвестной/изменённой разметке;
 - response iframe isolation protocol;
 - restored/raw display and copy;
 - rerender recovery;

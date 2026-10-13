@@ -3,6 +3,7 @@ import type { ContentSettings, RuntimeResponse, SupportedSite } from "../backgro
 const composer = document.querySelector<HTMLElement>("#composer")!;
 const prompt = document.querySelector<HTMLTextAreaElement>("#prompt")!;
 const protectButton = document.querySelector<HTMLButtonElement>("#protect")!;
+const copyButton = document.querySelector<HTMLButtonElement>("#copy-safe")!;
 const unsafeButton = document.querySelector<HTMLButtonElement>("#unsafe")!;
 const statusText = document.querySelector<HTMLElement>("#status-text")!;
 
@@ -10,6 +11,7 @@ let site: SupportedSite | null = null;
 let conversationId = "";
 let settings: ContentSettings | null = null;
 let protectedSnapshot = "";
+let safeSnapshot = "";
 let working = false;
 let pendingAutoSend = false;
 
@@ -45,6 +47,8 @@ function markEdited(): void {
   unsafeButton.classList.add("hidden");
   if (!prompt.value) {
     protectedSnapshot = "";
+    safeSnapshot = "";
+    copyButton.classList.add("hidden");
     setState("idle", "Готово к защите");
     return;
   }
@@ -52,6 +56,8 @@ function markEdited(): void {
     setState("protected", "Текст защищён");
     return;
   }
+  safeSnapshot = "";
+  copyButton.classList.add("hidden");
   setState("dirty", protectedSnapshot ? "Текст изменён — защитите снова" : "Есть незащищённый текст");
 }
 
@@ -63,6 +69,8 @@ async function protect(): Promise<void> {
     return;
   }
   setState("working", "Локальный анализ Oracle…");
+  safeSnapshot = "";
+  copyButton.classList.add("hidden");
   try {
     const response = await runtime<RuntimeResponse>({
       type: "OBFUSCATE",
@@ -77,6 +85,8 @@ async function protect(): Promise<void> {
       throw new Error(response.findings.find((item) => item.severity === "error")?.message ?? "Ошибка проверки");
     }
     protectedSnapshot = text;
+    safeSnapshot = response.obfuscatedText;
+    copyButton.classList.remove("hidden");
     const warningCount = response.findings.filter((item) => item.severity === "warning").length;
     setState(
       "protected",
@@ -87,6 +97,16 @@ async function protect(): Promise<void> {
     post("SAFE_TEXT", { text: response.obfuscatedText });
   } catch (error) {
     setState("error", error instanceof Error ? error.message : String(error));
+  }
+}
+
+async function copySafeText(): Promise<void> {
+  if (!safeSnapshot) return;
+  try {
+    await navigator.clipboard.writeText(safeSnapshot);
+    setState("protected", "OBF-текст скопирован");
+  } catch (error) {
+    setState("error", error instanceof Error ? error.message : "Не удалось скопировать OBF-текст");
   }
 }
 
@@ -118,6 +138,7 @@ prompt.addEventListener("keydown", (event) => {
   post("SEND_GESTURE");
 });
 protectButton.addEventListener("click", () => void protect());
+copyButton.addEventListener("click", () => void copySafeText());
 unsafeButton.addEventListener("click", (event) => {
   if (!event.isTrusted) return;
   void storeUnsafe(false);
@@ -159,6 +180,8 @@ window.addEventListener("message", (event: MessageEvent) => {
   if (message.type === "RESET_AFTER_SEND" || message.type === "RESET_CONVERSATION") {
     prompt.value = "";
     protectedSnapshot = "";
+    safeSnapshot = "";
+    copyButton.classList.add("hidden");
     unsafeButton.classList.add("hidden");
     setState(
       "idle",
