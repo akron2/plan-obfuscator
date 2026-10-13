@@ -238,6 +238,16 @@ def test_two_sql_monitor_reports_in_one_prompt() -> None:
     assert exact_restore(result.text, result.replacements) == source
 
 
+def test_split_materials_accepts_windows_line_endings() -> None:
+    report = _generated_case("xplan-q1-index-basic.txt")
+    unix = report.source.replace("\r\n", "\n")
+    source = (
+        "Проверь:\n```sql\nselect COL_PRIVATE from TABLE_SECRET\n```\n" + unix
+    ).replace("\n", "\r\n")
+    materials = split_materials(source)
+    assert [item.kind for item in materials] == [ArtifactKind.SQL, ArtifactKind.XPLAN]
+
+
 def test_split_materials_finds_fenced_sql_and_report() -> None:
     report = _generated_case("xplan-q1-index-basic.txt")
     source = (

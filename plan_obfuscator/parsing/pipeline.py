@@ -165,7 +165,7 @@ def _report_regions(source: str) -> list[_ReportRegion]:
         r"^(?:[ \t]*SQL Monitoring Report[ \t]*|"
         r"[ \t]*SQL_ID\s+[a-z0-9]+\s*,\s*child number\s+\d+[ \t]*|"
         r"[ \t]*(?:EXPLAINED SQL STATEMENT|SQL STATEMENT)\s*:[ \t]*|"
-        r"[ \t]*Plan hash value\s*:\s*\d+[ \t]*)$",
+        r"[ \t]*Plan hash value\s*:\s*\d+[ \t]*)\r?$",
         re.IGNORECASE | re.MULTILINE,
     )
     accepted: list[dict[str, object]] = []
