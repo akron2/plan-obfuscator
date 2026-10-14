@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Case, Finding, ObfuscationRun, Response, utc_now
+from .answer_formatting import prepare_answer_markdown
 
 
 class ResponseService:
@@ -56,14 +57,22 @@ class ResponseService:
         run_id: str,
         raw_text: str,
         model_label: str = "",
+        *,
+        pasted_plain: str = "",
+        pasted_html: str = "",
     ) -> Response:
         if not raw_text.strip():
             raise ValueError("Response text is empty")
-        restored, unknown = self.restore(run_id, raw_text)
+        answer_markdown = prepare_answer_markdown(
+            raw_text,
+            pasted_plain=pasted_plain,
+            pasted_html=pasted_html,
+        )
+        restored, unknown = self.restore(run_id, answer_markdown)
         response = Response(
             run_id=run_id,
             model_label=model_label.strip(),
-            raw_text=raw_text,
+            raw_text=answer_markdown,
             restored_text=restored,
             unknown_markers=unknown,
         )

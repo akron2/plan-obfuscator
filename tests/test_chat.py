@@ -84,6 +84,22 @@ def test_file_is_material_even_when_content_is_unknown(db_session) -> None:
     assert result.artifact.artifact.display_name == "diagnostic.log"
 
 
+def test_clipboard_html_is_ignored_for_oracle_material(db_session) -> None:
+    case = CaseService(db_session).create_case(NEW_CASE_TITLE)
+    source = "select secret_column from secret_table"
+
+    result = ChatService(db_session).submit(
+        case.id,
+        source,
+        mode=ComposerMode.MATERIAL,
+        pasted_plain=source,
+        pasted_html="<h1>HTML from SQL Developer must not replace SQL</h1>",
+    )
+
+    assert result.artifact is not None
+    assert result.artifact.revision.source_text == source
+
+
 def test_title_generation_is_compact() -> None:
     question = "  Почему   очень длинный запрос " + ("работает медленно " * 8)
     title = title_from_question(question)

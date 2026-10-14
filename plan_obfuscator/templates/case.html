@@ -182,6 +182,7 @@
           </article>
 
           {% for response in run.responses %}
+          {% set rendered_response = rendered_responses[response.id] %}
           <article class="chat-item assistant-message response-message" role="article" aria-label="Восстановленный ответ">
             <div class="message-card response-card">
               <div class="message-card-header">
@@ -189,13 +190,14 @@
                 <time>{{ response.created_at.strftime('%d.%m.%Y %H:%M') }}</time>
               </div>
               {% if response.unknown_markers %}<div class="unknown-warning">Не восстановлены: {{ response.unknown_markers|join(', ') }}</div>{% endif %}
-              <pre id="response-{{ response.id }}" class="restored-answer">{{ response.restored_text }}</pre>
+              <div class="response-view-switch" role="group" aria-label="Представление ответа">
+                <button type="button" data-response-view="formatted" data-response-id="{{ response.id }}" aria-controls="response-formatted-{{ response.id }}" aria-pressed="true">Оформленный</button>
+                <button type="button" data-response-view="source" data-response-id="{{ response.id }}" aria-controls="response-source-{{ response.id }}" aria-pressed="false">Исходный текст</button>
+              </div>
+              <div id="response-formatted-{{ response.id }}" class="rendered-answer" data-response-panel="formatted">{{ rendered_response.html }}</div>
+              <pre id="response-source-{{ response.id }}" class="restored-answer" data-response-panel="source" hidden>{{ response.restored_text }}</pre>
               <div class="secondary-actions">
-                <button type="button" data-copy-target="response-{{ response.id }}">Копировать ответ</button>
-                <details class="inline-details raw-response">
-                  <summary>Показать оригинал</summary>
-                  <pre class="code-block">{{ response.raw_text }}</pre>
-                </details>
+                <button type="button" data-copy-target="response-source-{{ response.id }}">Копировать ответ</button>
               </div>
             </div>
           </article>
@@ -236,6 +238,8 @@
       </form>
       {% endif %}
       <form method="post" action="/cases/{{ case.id }}/messages" enctype="multipart/form-data" class="composer" data-composer data-case-prefix="{{ case.token_prefix }}"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+        <textarea name="pasted_plain" data-pasted-plain hidden>{{ pasted_plain }}</textarea>
+        <textarea name="pasted_html" data-pasted-html hidden>{{ pasted_html }}</textarea>
         <div class="composer-toolbar">
           <label class="attach-button" title="Добавить файл">
             <span aria-hidden="true">＋</span><span class="visually-hidden">Добавить файл</span>

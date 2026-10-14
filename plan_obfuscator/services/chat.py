@@ -151,6 +151,8 @@ class ChatService:
         mode: ComposerMode | str = ComposerMode.AUTO,
         display_name: str = "",
         has_file: bool = False,
+        pasted_plain: str = "",
+        pasted_html: str = "",
     ) -> ChatSubmission:
         source_text = text
         clean_text = source_text.strip()
@@ -171,9 +173,7 @@ class ChatService:
             classification = Classification(
                 kind=kind,
                 artifact_kind=(
-                    detect_artifact_kind(source_text)
-                    if kind == SubmissionKind.MATERIAL
-                    else None
+                    detect_artifact_kind(source_text) if kind == SubmissionKind.MATERIAL else None
                 ),
                 confidence=1.0,
                 reason="explicit_mode",
@@ -220,7 +220,9 @@ class ChatService:
             raise MissingRunError("Сначала сформируйте prompt вопросом к модели.")
         response = ResponseService(self.session).create_response(
             latest_run.id,
-            clean_text,
+            source_text,
+            pasted_plain=pasted_plain,
+            pasted_html=pasted_html,
         )
         return ChatSubmission(
             kind=kind,

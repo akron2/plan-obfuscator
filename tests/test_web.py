@@ -100,9 +100,7 @@ def test_migration_is_repeatable(tmp_path: Path) -> None:
     try:
         remaining = {
             row[0]
-            for row in connection.execute(
-                "select name from sqlite_master where type='table'"
-            )
+            for row in connection.execute("select name from sqlite_master where type='table'")
         }
     finally:
         connection.close()
@@ -180,6 +178,15 @@ def test_foreign_host_header_is_rejected(tmp_path: Path) -> None:
         assert foreign.get("/health").status_code == 400
 
 
+def test_browser_responses_block_external_resources(client) -> None:
+    response = client.get("/")
+
+    assert "connect-src 'none'" in response.headers["content-security-policy"]
+    assert "img-src 'self' data:" in response.headers["content-security-policy"]
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+
+
 def test_multipart_upload_accepts_form_run_token(tmp_path: Path) -> None:
     app = create_app(Settings(data_dir=tmp_path / "upload-token"))
     with TestClient(app, base_url="http://127.0.0.1") as anonymous:
@@ -240,8 +247,118 @@ def test_chat_workspace_and_universal_composer_flow(client, fixture_text) -> Non
     assert "Последний цикл" in detail.text
     assert "Вся история" in detail.text
     assert "Восстановленный ответ" in detail.text
-    assert "Показать оригинал" in detail.text
-    assert 'data-composer' in detail.text
+    assert "Оформленный" in detail.text
+    assert "Исходный текст" in detail.text
+    assert "data-composer" in detail.text
+
+
+def test_rich_clipboard_response_is_converted_and_rendered(client, fixture_text) -> None:
+    case_id = client.post("/api/cases", json={"title": "Rich response"}).json()["id"]
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "material"},
+    )
+    prompt = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Проверь план", "mode": "question"},
+    ).json()["prompt_text"]
+    marker = next(word.strip(".,;:()\"'") for word in prompt.split() if "_TBL_" in word)
+    plain = f"Ответ по {marker}\nОбъект\nСтоимость\n{marker}\n9326"
+    html = f"""
+    <h2>Ответ по {marker}</h2>
+    <table>
+      <tr><th>Объект</th><th>Стоимость</th></tr>
+      <tr><td>{marker}</td><td>9326</td></tr>
+    </table>
+    """
+
+    saved = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={
+            "text": plain,
+            "mode": "response",
+            "pasted_plain": plain,
+            "pasted_html": html,
+        },
+    )
+    page = client.get(f"/cases/{case_id}")
+
+    assert saved.status_code == 201
+    assert "OBF_" not in saved.json()["restored_text"]
+    assert "<h2>Ответ по " in page.text
+    assert "<table>" in page.text
+    assert 'data-response-panel="formatted"' in page.text
+    assert 'data-response-panel="source"' in page.text
+    assert "pasted_html" in page.text
+    assert "vendor/mermaid.min.js" not in page.text
+
+
+def test_mermaid_asset_is_loaded_only_for_mermaid_response(client, fixture_text) -> None:
+    case_id = client.post("/api/cases", json={"title": "Mermaid response"}).json()["id"]
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "material"},
+    )
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Покажи поток", "mode": "question"},
+    )
+    before = client.get(f"/cases/{case_id}")
+
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={
+            "text": "```mermaid\nflowchart LR\n  A[SQL] --> B[Plan]\n```",
+            "mode": "response",
+        },
+    )
+    after = client.get(f"/cases/{case_id}")
+
+    assert "vendor/mermaid.min.js" not in before.text
+    assert "vendor/mermaid.min.js" in after.text
+    assert "data-mermaid-block" in after.text
+
+
+def test_rich_clipboard_survives_server_mode_choice(client, fixture_text) -> None:
+    case_id = client.post("/api/cases", json={"title": "Mode retry"}).json()["id"]
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "material"},
+    )
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Проверь план", "mode": "question"},
+    )
+    plain = "Ответ без маркеров: " + "длинный текст " * 35
+    html = "<h3>Ответ без маркеров</h3><p>" + "длинный текст " * 35 + "</p>"
+
+    ambiguous = client.post(
+        f"/cases/{case_id}/messages",
+        data={
+            "text": plain,
+            "mode": "auto",
+            "pasted_plain": plain,
+            "pasted_html": html,
+        },
+    )
+    saved = client.post(
+        f"/cases/{case_id}/messages",
+        data={
+            "text": plain,
+            "mode": "response",
+            "pasted_plain": plain,
+            "pasted_html": html,
+        },
+        follow_redirects=False,
+    )
+    page = client.get(f"/cases/{case_id}")
+
+    assert ambiguous.status_code == 422
+    assert "Что находится в поле?" in ambiguous.text
+    assert plain in ambiguous.text
+    assert "&lt;h3&gt;Ответ без маркеров&lt;/h3&gt;" in ambiguous.text
+    assert saved.status_code == 303
+    assert "<h3>Ответ без маркеров</h3>" in page.text
 
 
 def test_chat_question_without_context_preserves_draft(client) -> None:

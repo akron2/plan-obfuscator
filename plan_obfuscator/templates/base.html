@@ -6,6 +6,7 @@
   <link rel="icon" href="data:,">
   <title>{% block title %}Plan Obfuscator{% endblock %}</title>
   <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}">
+  {% if has_mermaid %}<script defer src="{{ url_for('static', path='vendor/mermaid.min.js') }}"></script>{% endif %}
   <script defer src="{{ url_for('static', path='app.js') }}"></script>
 </head>
 <body class="app-body">

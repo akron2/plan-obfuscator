@@ -153,6 +153,39 @@ details[open] > summary .disclosure-icon { transform: rotate(180deg); }
 .inline-details[open] { width: 100%; }
 .code-block { overflow: auto; max-height: 460px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #080a0d; color: #b9c4cf; font: 0.69rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
 .response-card { border-color: rgba(93, 214, 164, 0.17); }
+.response-view-switch { display: inline-flex; margin-top: 12px; padding: 3px; border: 1px solid var(--line); border-radius: 8px; background: #0c0f13; }
+.response-view-switch button { padding: 5px 9px; border: 0; border-radius: 5px; background: transparent; color: var(--muted); cursor: pointer; font-size: 0.65rem; font-weight: 650; }
+.response-view-switch button[aria-pressed="true"] { background: var(--surface-raised); color: var(--text); }
+.rendered-answer { max-height: 540px; overflow: auto; margin: 13px 0; color: #e4ebe7; font-size: 0.82rem; line-height: 1.62; overflow-wrap: anywhere; }
+.rendered-answer > :first-child { margin-top: 0; }
+.rendered-answer > :last-child { margin-bottom: 0; }
+.rendered-answer h1, .rendered-answer h2, .rendered-answer h3, .rendered-answer h4, .rendered-answer h5, .rendered-answer h6 { margin: 1.25em 0 0.5em; color: #f1f5f3; line-height: 1.25; }
+.rendered-answer h1 { font-size: 1.35rem; }
+.rendered-answer h2 { font-size: 1.15rem; }
+.rendered-answer h3 { font-size: 1rem; }
+.rendered-answer h4, .rendered-answer h5, .rendered-answer h6 { font-size: 0.9rem; }
+.rendered-answer p { margin: 0.7em 0; }
+.rendered-answer ul, .rendered-answer ol { margin: 0.7em 0; padding-left: 1.6em; }
+.rendered-answer li + li { margin-top: 0.25em; }
+.rendered-answer a { color: #9eb0ff; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.rendered-answer blockquote { margin: 0.9em 0; padding: 0.15em 0 0.15em 1em; border-left: 3px solid var(--line-strong); color: var(--muted-strong); }
+.rendered-answer table { width: 100%; margin: 0.9em 0; border-collapse: collapse; font-size: 0.76rem; }
+.rendered-answer th, .rendered-answer td { padding: 7px 9px; border: 1px solid var(--line); text-align: left; vertical-align: top; }
+.rendered-answer th { background: rgba(142, 161, 255, 0.08); color: #eef0ff; }
+.rendered-answer :not(pre) > code { padding: 0.12em 0.35em; border: 1px solid var(--line); border-radius: 4px; background: #080a0d; color: #d6e2ec; font: 0.9em ui-monospace, SFMono-Regular, Consolas, monospace; }
+.code-highlight, .mermaid-source { overflow: auto; margin: 0.9em 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #0d1117; color: #e6edf3; font: 0.75rem/1.55 ui-monospace, SFMono-Regular, Consolas, monospace; white-space: pre; }
+.image-placeholder { color: var(--muted); font-style: italic; }
+.mermaid-block { margin: 0.9em 0; }
+.mermaid-diagram { overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #0d1117; text-align: center; }
+.mermaid-diagram svg { max-width: 100%; height: auto; }
+.highlight .c, .highlight .ch, .highlight .cm, .highlight .c1, .highlight .cs, .highlight .cp, .highlight .cpf { color: #8b949e; font-style: italic; }
+.highlight .k, .highlight .kd, .highlight .kn, .highlight .kr, .highlight .kt, .highlight .o, .highlight .ow { color: #ff7b72; }
+.highlight .kc, .highlight .kp, .highlight .no, .highlight .nl, .highlight .nv, .highlight .vc, .highlight .vg, .highlight .vi { color: #79c0ff; }
+.highlight .m, .highlight .mb, .highlight .mf, .highlight .mh, .highlight .mi, .highlight .mo, .highlight .s, .highlight .s1, .highlight .s2, .highlight .sb, .highlight .sc, .highlight .sd { color: #a5d6ff; }
+.highlight .nc, .highlight .ne { color: #f0883e; font-weight: 700; }
+.highlight .nd, .highlight .nf, .highlight .fm { color: #d2a8ff; }
+.highlight .nt { color: #7ee787; }
+.highlight .err { color: #f85149; }
 .restored-answer { max-height: 540px; overflow: auto; margin: 13px 0; padding: 2px 0; color: #e4ebe7; font: 0.82rem/1.6 ui-sans-serif, system-ui, sans-serif; white-space: pre-wrap; overflow-wrap: anywhere; }
 .unknown-warning { margin: 11px 0; padding: 8px 10px; border: 1px solid rgba(240, 198, 107, 0.24); border-radius: 7px; background: rgba(240, 198, 107, 0.06); color: var(--warning); font-size: 0.68rem; }
 .raw-response[open] { margin-top: 8px; }

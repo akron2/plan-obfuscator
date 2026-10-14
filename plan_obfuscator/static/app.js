@@ -6,6 +6,8 @@ const composerMode = document.querySelector("[data-composer-mode]");
 const detectedKind = document.querySelector("[data-detected-kind]");
 const fileInput = document.querySelector("[data-file-input]");
 const selectedFile = document.querySelector("[data-selected-file]");
+const pastedPlain = document.querySelector("[data-pasted-plain]");
+const pastedHtml = document.querySelector("[data-pasted-html]");
 
 function copyTextFrom(target) {
   return target?.value ?? target?.textContent ?? "";
@@ -36,6 +38,19 @@ document.addEventListener("click", async (event) => {
     forceMode.closest(".classification-prompt")?.remove();
     updateDetection();
     composerInput?.focus();
+  }
+
+  const responseView = event.target.closest("[data-response-view]");
+  if (responseView) {
+    const responseId = responseView.dataset.responseId;
+    const selectedView = responseView.dataset.responseView;
+    document.querySelectorAll(`[data-response-id="${responseId}"]`).forEach((button) => {
+      button.setAttribute("aria-pressed", String(button.dataset.responseView === selectedView));
+    });
+    for (const view of ["formatted", "source"]) {
+      const panel = document.getElementById(`response-${view}-${responseId}`);
+      if (panel) panel.hidden = view !== selectedView;
+    }
   }
 
   if (event.target.closest("[data-sidebar-open]")) layout?.classList.add("sidebar-open");
@@ -123,6 +138,12 @@ function updateDetection() {
 }
 
 if (composerInput) {
+  composerInput.addEventListener("paste", (event) => {
+    const clipboard = event.clipboardData;
+    if (!clipboard || !pastedPlain || !pastedHtml) return;
+    pastedPlain.value = clipboard.getData("text/plain") || "";
+    pastedHtml.value = clipboard.getData("text/html") || "";
+  });
   composerInput.addEventListener("input", () => {
     autoGrow();
     updateDetection();
@@ -163,6 +184,56 @@ if (composer) {
 }
 
 updateDetection();
+
+function sanitizedMermaidSvg(svg) {
+  const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+  if (parsed.querySelector("parsererror")) throw new Error("Invalid Mermaid SVG");
+  parsed.querySelectorAll("script, image, foreignObject").forEach((node) => node.remove());
+  parsed.querySelectorAll("*").forEach((node) => {
+    for (const attribute of [...node.attributes]) {
+      const name = attribute.name.toLowerCase();
+      const value = attribute.value.trim();
+      if (["href", "xlink:href", "src"].includes(name) && !value.startsWith("#")) {
+        node.removeAttribute(attribute.name);
+      }
+      if (/url\(\s*["']?(?:https?:|\/\/|data:)/i.test(value)) {
+        node.removeAttribute(attribute.name);
+      }
+      if (name.startsWith("on")) node.removeAttribute(attribute.name);
+    }
+  });
+  return document.importNode(parsed.documentElement, true);
+}
+
+async function renderMermaidBlocks() {
+  const blocks = [...document.querySelectorAll("[data-mermaid-block]")];
+  if (!blocks.length || !window.mermaid) return;
+  window.mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: "strict",
+    htmlLabels: false,
+    maxTextSize: 20000,
+    maxEdges: 200,
+    suppressErrorRendering: true,
+    theme: "dark",
+  });
+  for (const [index, block] of blocks.entries()) {
+    const source = block.querySelector(".mermaid-source");
+    const target = block.querySelector("[data-mermaid-diagram]");
+    const definition = source?.textContent || "";
+    if (!source || !target || !definition || definition.length > 20000) continue;
+    try {
+      const result = await window.mermaid.render(`plan-obfuscator-mermaid-${index}`, definition);
+      target.replaceChildren(sanitizedMermaidSvg(result.svg));
+      target.hidden = false;
+      source.hidden = true;
+    } catch (_error) {
+      block.classList.add("mermaid-error");
+    }
+  }
+}
+
+void renderMermaidBlocks();
 
 window.addEventListener("load", () => {
   if (window.location.hash === "#context") return;

@@ -31,6 +31,7 @@ from .services.chat import (
     MissingRunError,
     SubmissionKind,
 )
+from .services.response_rendering import RenderedAnswer, render_answer_markdown
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 REQUEST_TOKEN_FIELD = "_token"
@@ -68,12 +69,16 @@ class RunCreatePayload(BaseModel):
 class ResponseCreatePayload(BaseModel):
     text: str = Field(min_length=1)
     model_label: str = ""
+    pasted_plain: str = ""
+    pasted_html: str = ""
 
 
 class ChatMessagePayload(BaseModel):
     text: str = Field(min_length=1)
     mode: ComposerMode = ComposerMode.AUTO
     display_name: str = ""
+    pasted_plain: str = ""
+    pasted_html: str = ""
 
 
 def latest_case_run(case: Case) -> ObfuscationRun | None:
@@ -115,9 +120,7 @@ def case_context_changed(case: Case, latest: ObfuscationRun | None) -> bool:
         for artifact in case.artifacts
         if artifact.is_active and artifact.current_revision_id is not None
     }
-    run_revisions = {
-        item.artifact_revision_id for item in latest.run_artifacts
-    }
+    run_revisions = {item.artifact_revision_id for item in latest.run_artifacts}
     return current_revisions != run_revisions
 
 
@@ -209,6 +212,25 @@ def create_app(
     app.state.session_factory = session_factory
     app.state.request_token = secrets.token_urlsafe(32)
 
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "base-uri 'none'; "
+            "connect-src 'none'; "
+            "font-src 'self' data:; "
+            "form-action 'self'; "
+            "frame-src 'none'; "
+            "img-src 'self' data:; "
+            "object-src 'none'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'"
+        )
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        return response
+
     templates = Jinja2Templates(directory=str(PACKAGE_DIR / "templates"))
     templates.env.globals["request_token_field"] = REQUEST_TOKEN_FIELD
     templates.env.globals["request_token"] = app.state.request_token
@@ -248,6 +270,8 @@ def create_app(
         error: str = "",
         composer_draft: str = "",
         composer_mode: str = ComposerMode.AUTO.value,
+        pasted_plain: str = "",
+        pasted_html: str = "",
         needs_mode: bool = False,
         offer_new_case: bool = False,
         status_code: int = 200,
@@ -264,6 +288,17 @@ def create_app(
                     artifact_counts.get(artifact.detected_type, 0) + 1
                 )
         awaiting_response = bool(latest is not None and not latest.responses)
+        rendered_responses: dict[str, RenderedAnswer] = {}
+        replacements: dict[str, str] = {}
+        if case is not None:
+            replacements = {symbol.marker: symbol.preferred_original for symbol in case.symbols}
+            for run in case.runs:
+                for response in run.responses:
+                    rendered_responses[response.id] = render_answer_markdown(
+                        response.raw_text,
+                        replacements,
+                        response.unknown_markers,
+                    )
         placeholder = (
             "Вставьте ответ ChatGPT или Claude…"
             if awaiting_response
@@ -287,9 +322,15 @@ def create_app(
                 "error": error or request.query_params.get("error", ""),
                 "composer_draft": composer_draft,
                 "composer_mode": composer_mode,
+                "pasted_plain": pasted_plain,
+                "pasted_html": pasted_html,
                 "composer_placeholder": placeholder,
                 "needs_mode": needs_mode,
                 "offer_new_case": offer_new_case,
+                "rendered_responses": rendered_responses,
+                "has_mermaid": any(
+                    rendered.has_mermaid for rendered in rendered_responses.values()
+                ),
             },
         )
 
@@ -367,6 +408,8 @@ def create_app(
         text: Annotated[str, Form()] = "",
         mode: Annotated[str, Form()] = ComposerMode.AUTO.value,
         display_name: Annotated[str, Form()] = "",
+        pasted_plain: Annotated[str, Form()] = "",
+        pasted_html: Annotated[str, Form()] = "",
         upload: Annotated[UploadFile | None, File()] = None,
     ) -> Response:
         source = text
@@ -395,6 +438,8 @@ def create_app(
                 mode=mode,
                 display_name=display_name,
                 has_file=has_file,
+                pasted_plain=pasted_plain if not has_file else "",
+                pasted_html=pasted_html if not has_file else "",
             )
         except (AmbiguousInputError, MissingContextError, MissingRunError) as error:
             case = load_case_view(session, case_id)
@@ -405,6 +450,8 @@ def create_app(
                 error=str(error),
                 composer_draft=source,
                 composer_mode=mode,
+                pasted_plain=pasted_plain if not has_file else "",
+                pasted_html=pasted_html if not has_file else "",
                 needs_mode=isinstance(error, AmbiguousInputError),
                 status_code=422,
             )
@@ -417,6 +464,8 @@ def create_app(
                 error=str(error),
                 composer_draft=source,
                 composer_mode=ComposerMode.MATERIAL.value,
+                pasted_plain=pasted_plain if not has_file else "",
+                pasted_html=pasted_html if not has_file else "",
                 offer_new_case=True,
                 status_code=409,
             )
@@ -429,6 +478,8 @@ def create_app(
                 error=str(error),
                 composer_draft=source,
                 composer_mode=mode,
+                pasted_plain=pasted_plain if not has_file else "",
+                pasted_html=pasted_html if not has_file else "",
                 status_code=422,
             )
 
@@ -547,12 +598,20 @@ def create_app(
         session: SessionDependency,
         text: Annotated[str, Form()],
         model_label: Annotated[str, Form()] = "",
+        pasted_plain: Annotated[str, Form()] = "",
+        pasted_html: Annotated[str, Form()] = "",
     ) -> RedirectResponse:
         run = session.get(ObfuscationRun, run_id)
         if run is None:
             raise HTTPException(status_code=404, detail="Run not found")
         try:
-            response = ResponseService(session).create_response(run_id, text, model_label)
+            response = ResponseService(session).create_response(
+                run_id,
+                text,
+                model_label,
+                pasted_plain=pasted_plain,
+                pasted_html=pasted_html,
+            )
         except ValueError as error:
             return redirect_to_case(run.case_id, error=str(error))
         notice = "Ответ восстановлен"
@@ -652,6 +711,8 @@ def create_app(
                 payload.text,
                 mode=payload.mode,
                 display_name=payload.display_name,
+                pasted_plain=payload.pasted_plain,
+                pasted_html=payload.pasted_html,
             )
         except CaseNotFoundError:
             raise HTTPException(status_code=404, detail="Case not found") from None
@@ -765,7 +826,11 @@ def create_app(
     ) -> dict[str, object]:
         try:
             response = ResponseService(session).create_response(
-                run_id, payload.text, payload.model_label
+                run_id,
+                payload.text,
+                payload.model_label,
+                pasted_plain=payload.pasted_plain,
+                pasted_html=payload.pasted_html,
             )
         except LookupError:
             raise HTTPException(status_code=404, detail="Run not found") from None
