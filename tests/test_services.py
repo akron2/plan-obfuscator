@@ -218,3 +218,119 @@ def test_existing_case_marker_is_reported(db_session) -> None:
     run = ObfuscationService(db_session).run(case.id)
     assert any(item.code == "input_marker_collision" for item in run.findings)
     assert run.validation_status == "warning"
+
+
+def test_questions_appear_before_materials_and_preserve_addition_order(
+    db_session, fixture_text
+) -> None:
+    cases = CaseService(db_session)
+    case = cases.create_case("Ordering")
+    obf = ObfuscationService(db_session)
+
+    # Add two questions before any materials
+    run = obf.add_question(case.id, "Первый вопрос: почему выбран hash join?")
+    assert run.prompt_text == ""
+    assert run.validation_status == "pending"
+
+    run = obf.add_question(case.id, "Второй вопрос: как уменьшить буферные чтения?")
+    assert run.questions == [
+        "Первый вопрос: почему выбран hash join?",
+        "Второй вопрос: как уменьшить буферные чтения?",
+    ]
+    assert run.prompt_text == ""
+
+    # Add XPLAN first, then SQL (reverse of old TYPE_ORDER) and sync open cycle
+    cases.add_artifact(case.id, fixture_text("xplan_19c.txt"), "xplan.txt")
+    cases.add_artifact(case.id, fixture_text("query.sql"), "query.sql")
+    synced = obf.sync_open_run(case.id)
+    assert synced is not None
+    assert synced.id == run.id
+    assert synced.validation_status == "ok"
+
+    prompt = synced.prompt_text
+    q1_pos = prompt.index("=== ВОПРОС #1 ===")
+    q2_pos = prompt.index("=== ВОПРОС #2 ===")
+    m1_pos = prompt.index("=== DBMS_XPLAN #1: xplan.txt ===")
+    m2_pos = prompt.index("=== SQL #1: query.sql ===")
+    assert q1_pos < q2_pos < m1_pos < m2_pos
+
+
+def test_known_symbols_are_masked_in_question_prompt_while_ui_keeps_original(
+    db_session, fixture_text
+) -> None:
+    cases = CaseService(db_session)
+    case = cases.create_case("Masking in questions")
+    cases.add_artifact(case.id, fixture_text("query.sql"), "query.sql")
+    obf = ObfuscationService(db_session)
+
+    raw_q = "Почему таблица ORDERS и CUSTOMERS в схеме SALES сканируются целиком?"
+    run = obf.add_question(case.id, raw_q)
+
+    # UI keeps original readable question text
+    assert run.questions == [raw_q]
+    assert run.question == raw_q
+
+    # Prompt text masks ORDERS, CUSTOMERS, and SALES with case markers
+    orders_symbol = next(
+        s for s in run.case.symbols if s.entity_type == "table" and s.canonical_value == "U:ORDERS"
+    )
+    customers_symbol = next(
+        s
+        for s in run.case.symbols
+        if s.entity_type == "table" and s.canonical_value == "U:CUSTOMERS"
+    )
+    schema_symbol = next(
+        s
+        for s in run.case.symbols
+        if s.entity_type == "schema" and s.canonical_value == "U:SALES"
+    )
+    question_section = run.prompt_text.split("=== SQL #1")[0]
+    assert orders_symbol.marker in question_section
+    assert customers_symbol.marker in question_section
+    assert schema_symbol.marker in question_section
+    assert "ORDERS" not in question_section
+    assert "CUSTOMERS" not in question_section
+    assert "SALES" not in question_section
+
+
+def test_second_cycle_includes_only_new_questions_and_new_materials(
+    db_session, fixture_text
+) -> None:
+    cases = CaseService(db_session)
+    case = cases.create_case("Multi-cycle")
+    obf = ObfuscationService(db_session)
+    responses = ResponseService(db_session)
+
+    cases.add_artifact(case.id, fixture_text("query.sql"), "query.sql")
+    cases.add_artifact(case.id, fixture_text("xplan_19c.txt"), "xplan.txt")
+    run1 = obf.add_question(case.id, "Вопрос первого цикла")
+    assert len(run1.run_artifacts) == 2
+
+    # Close Cycle 1 with an AI response
+    responses.create_response(run1.id, "Ответ первого цикла", "Claude")
+
+    # Start Cycle 2 with a follow-up question referencing ORDERS (no new materials yet)
+    run2 = obf.add_question(case.id, "А какой индекс нужен на ORDERS?")
+    assert run2.id != run1.id
+    assert run2.questions == ["А какой индекс нужен на ORDERS?"]
+    assert len(run2.run_artifacts) == 0
+    assert "Вопрос первого цикла" not in run2.prompt_text
+    assert "=== SQL" not in run2.prompt_text
+    assert "=== ВОПРОС ===" in run2.prompt_text
+    orders_symbol = next(
+        s for s in run2.case.symbols if s.entity_type == "table" and s.canonical_value == "U:ORDERS"
+    )
+    assert orders_symbol.marker in run2.prompt_text
+
+    # Add a new material in Cycle 2 before AI response -> rebuilds run2 with only new material
+    cases.add_artifact(case.id, fixture_text("sql_monitor_19c.txt"), "monitor.txt")
+    run2 = obf.sync_open_run(case.id)
+    assert run2 is not None
+    assert len(run2.run_artifacts) == 1
+    assert run2.run_artifacts[0].display_name == "monitor.txt"
+    assert run2.prompt_text.index("=== ВОПРОС ===") < run2.prompt_text.index(
+        "=== SQL MONITOR TEXT #1: monitor.txt ==="
+    )
+    assert "query.sql" not in run2.prompt_text
+    assert "xplan.txt" not in run2.prompt_text
+

@@ -117,6 +117,10 @@ class ChatMessagePayload(BaseModel):
     pasted_html: str = ""
 
 
+class QuestionUpdatePayload(BaseModel):
+    text: str = Field(min_length=1)
+
+
 def latest_case_run(case: Case) -> ObfuscationRun | None:
     return max(case.runs, key=lambda item: item.created_at, default=None)
 
@@ -130,8 +134,12 @@ def case_sidebar_state(case: Case) -> dict[str, object]:
         state = "materials"
         label = f"Материалов: {len(active_artifacts)}"
     if latest is not None:
-        state = "prompt"
-        label = "Prompt готов"
+        if latest.prompt_text:
+            state = "prompt"
+            label = "Prompt готов"
+        elif latest.question_items:
+            state = "materials"
+            label = f"Вопросов: {len(latest.question_items)}"
         if latest.responses:
             state = "response"
             label = "Ответ восстановлен"
@@ -149,15 +157,21 @@ def case_sidebar_state(case: Case) -> dict[str, object]:
 
 
 def case_context_changed(case: Case, latest: ObfuscationRun | None) -> bool:
-    if latest is None:
+    if latest is None or not latest.responses:
         return False
     current_revisions = {
         artifact.current_revision_id
         for artifact in case.artifacts
         if artifact.is_active and artifact.current_revision_id is not None
     }
-    run_revisions = {item.artifact_revision_id for item in latest.run_artifacts}
-    return current_revisions != run_revisions
+    sent_revisions = {
+        item.artifact_revision_id
+        for run in case.runs
+        if run.responses
+        for item in run.run_artifacts
+    }
+    return bool(current_revisions - sent_revisions)
+
 
 
 def decode_uploaded_content(content: bytes) -> str:
@@ -300,6 +314,7 @@ def create_app(
         for artifact in case.artifacts:
             artifact.revisions.sort(key=lambda item: item.version)
         for run in case.runs:
+            run.run_artifacts.sort(key=lambda item: item.position)
             run.responses.sort(key=lambda item: item.created_at)
         return case
 
@@ -323,13 +338,35 @@ def create_app(
         latest = latest_case_run(case) if case is not None else None
         artifact_counts: dict[str, int] = {}
         active_artifacts: list[Artifact] = []
+        closed_runs: list[ObfuscationRun] = []
+        open_run: ObfuscationRun | None = None
+        open_cycle_artifacts: list[Artifact] = []
+        artifact_by_id: dict[str, Artifact] = {}
+        revision_by_id: dict[str, ArtifactRevision] = {}
         if case is not None:
             active_artifacts = [artifact for artifact in case.artifacts if artifact.is_active]
+            for artifact in case.artifacts:
+                artifact_by_id[artifact.id] = artifact
+                for rev in artifact.revisions:
+                    revision_by_id[rev.id] = rev
             for artifact in active_artifacts:
                 artifact_counts[artifact.detected_type] = (
                     artifact_counts.get(artifact.detected_type, 0) + 1
                 )
-        awaiting_response = bool(latest is not None and not latest.responses)
+            closed_runs = [run for run in case.runs if run.responses]
+            open_runs = [run for run in case.runs if not run.responses]
+            open_run = open_runs[-1] if open_runs else None
+            sent_revision_ids = {
+                ra.artifact_revision_id
+                for closed in closed_runs
+                for ra in closed.run_artifacts
+            }
+            open_cycle_artifacts = [
+                artifact
+                for artifact in active_artifacts
+                if artifact.current_revision_id not in sent_revision_ids
+            ]
+        awaiting_response = bool(open_run is not None and open_run.prompt_text)
         rendered_responses: dict[str, RenderedAnswer] = {}
         replacements: dict[str, str] = {}
         if case is not None and any(run.responses for run in case.runs):
@@ -360,6 +397,11 @@ def create_app(
                 "case": case,
                 "sidebar_cases": sidebar_cases,
                 "latest_run": latest,
+                "closed_runs": closed_runs,
+                "open_run": open_run,
+                "open_cycle_artifacts": open_cycle_artifacts,
+                "artifact_by_id": artifact_by_id,
+                "revision_by_id": revision_by_id,
                 "context_changed": (
                     case_context_changed(case, latest) if case is not None else False
                 ),
@@ -472,6 +514,9 @@ def create_app(
                 display_name = upload.filename
         try:
             result = CaseService(session).add_artifact(case_id, source, display_name)
+            latest = ChatService(session).latest_run(case_id)
+            if latest is not None and not latest.responses:
+                ObfuscationService(session).sync_open_run(case_id)
         except (ValueError, SqlMismatchError) as error:
             return redirect_to_case(case_id, error=str(error))
         return redirect_to_case(
@@ -563,14 +608,19 @@ def create_app(
             )
 
         if submission.kind == SubmissionKind.MATERIAL and submission.artifact:
-            if len(submission.artifacts) > 1:
+            if submission.run and submission.run.prompt_text:
+                notice = "Материал добавлен, prompt пересобран"
+            elif len(submission.artifacts) > 1:
                 notice = f"Добавлено материалов: {len(submission.artifacts)}"
             else:
                 detected = submission.artifact.artifact.detected_type
                 label = ARTIFACT_LABELS.get(detected, "Material")
                 notice = f"Добавлен материал: {label}"
         elif submission.kind == SubmissionKind.QUESTION:
-            notice = "Prompt готов к копированию"
+            if submission.run and submission.run.prompt_text:
+                notice = "Prompt готов к копированию"
+            else:
+                notice = "Вопрос сохранён. Добавьте материал для сборки prompt"
         else:
             unknown_count = len(submission.response.unknown_markers) if submission.response else 0
             notice = "Ответ восстановлен"
@@ -627,11 +677,15 @@ def create_app(
             raise HTTPException(status_code=404, detail="Artifact not found")
         try:
             revision = CaseService(session).revise_artifact(artifact_id, text)
+            latest = ChatService(session).latest_run(artifact.case_id)
+            if latest is not None and not latest.responses:
+                ObfuscationService(session).sync_open_run(artifact.case_id)
         except (ValueError, SqlMismatchError) as error:
             return redirect_to_case(artifact.case_id, error=str(error))
         return redirect_to_case(
             artifact.case_id,
             notice=f"Создана ревизия {revision.version}",
+            anchor="latest",
         )
 
     @app.post("/artifacts/{artifact_id}/delete", name="delete_artifact_form")
@@ -649,18 +703,69 @@ def create_app(
             .where(ArtifactRevision.artifact_id == artifact_id)
             .limit(1)
         )
+        artifact.is_active = False
+        artifact.case.updated_at = utc_now()
+        session.flush()
+        latest = ChatService(session).latest_run(case_id)
+        if latest is not None and not latest.responses:
+            remaining_active = session.scalar(
+                select(Artifact.id).where(
+                    Artifact.case_id == case_id,
+                    Artifact.is_active.is_(True),
+                ).limit(1)
+            )
+            if latest.question_items or remaining_active is not None:
+                ObfuscationService(session).sync_open_run(case_id)
         if used_count is not None:
-            artifact.is_active = False
-            artifact.case.updated_at = utc_now()
             session.commit()
             return redirect_to_case(
                 case_id,
                 notice="Материал удалён из текущего контекста; история сохранена.",
+                anchor="latest",
             )
-        artifact.case.updated_at = utc_now()
         session.delete(artifact)
         session.commit()
-        return redirect_to_case(case_id, notice="Артефакт удалён")
+        return redirect_to_case(case_id, notice="Артефакт удалён", anchor="latest")
+
+    @app.post("/runs/{run_id}/questions/{question_id}/edit", name="edit_question_form")
+    def edit_question_form(
+        run_id: str,
+        question_id: str,
+        session: SessionDependency,
+        text: Annotated[str, Form()],
+    ) -> RedirectResponse:
+        run = session.get(ObfuscationRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        try:
+            ObfuscationService(session).update_question(run_id, question_id, text)
+        except (ValueError, LookupError) as error:
+            return redirect_to_case(run.case_id, error=str(error), anchor="latest")
+        return redirect_to_case(
+            run.case_id,
+            notice="Вопрос обновлён",
+            anchor="latest",
+        )
+
+    @app.post("/runs/{run_id}/questions/{question_id}/delete", name="delete_question_form")
+    def delete_question_form(
+        run_id: str,
+        question_id: str,
+        session: SessionDependency,
+    ) -> RedirectResponse:
+        run = session.get(ObfuscationRun, run_id)
+        if run is None:
+            raise HTTPException(status_code=404, detail="Run not found")
+        case_id = run.case_id
+        try:
+            ObfuscationService(session).delete_question(run_id, question_id)
+        except (ValueError, LookupError) as error:
+            return redirect_to_case(case_id, error=str(error), anchor="latest")
+        return redirect_to_case(
+            case_id,
+            notice="Вопрос удалён",
+            anchor="latest",
+        )
 
     @app.post("/cases/{case_id}/runs", name="create_run_form")
     def create_run_form(
@@ -760,6 +865,8 @@ def create_app(
                     "created_at": run.created_at.isoformat(),
                     "validation_status": run.validation_status,
                     "response_count": len(run.responses),
+                    "questions": run.questions,
+                    "question_items": run.question_items,
                 }
                 for run in case.runs
             ],
@@ -773,6 +880,9 @@ def create_app(
     ) -> dict[str, object]:
         try:
             result = CaseService(session).add_artifact(case_id, payload.text, payload.display_name)
+            latest = ChatService(session).latest_run(case_id)
+            if latest is not None and not latest.responses:
+                ObfuscationService(session).sync_open_run(case_id)
         except CaseNotFoundError:
             raise HTTPException(status_code=404, detail="Case not found") from None
         except SqlMismatchError:
@@ -824,6 +934,8 @@ def create_app(
         if submission.run:
             result["run_id"] = submission.run.id
             result["prompt_text"] = submission.run.prompt_text
+            result["questions"] = submission.run.questions
+            result["question_items"] = submission.run.question_items
         if submission.response:
             result["response_id"] = submission.response.id
             result["restored_text"] = submission.response.restored_text
@@ -836,8 +948,14 @@ def create_app(
         payload: ArtifactRevisionPayload,
         session: SessionDependency,
     ) -> dict[str, object]:
+        artifact = session.get(Artifact, artifact_id)
+        if artifact is None:
+            raise HTTPException(status_code=404, detail="Artifact not found")
         try:
             revision = CaseService(session).revise_artifact(artifact_id, payload.text)
+            latest = ChatService(session).latest_run(artifact.case_id)
+            if latest is not None and not latest.responses:
+                ObfuscationService(session).sync_open_run(artifact.case_id)
         except LookupError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
         except SqlMismatchError:
@@ -845,6 +963,45 @@ def create_app(
         except ValueError as error:
             raise HTTPException(status_code=422, detail=str(error)) from None
         return {"id": revision.id, "version": revision.version}
+
+    @app.post("/api/runs/{run_id}/questions/{question_id}", name="api_update_question")
+    def api_update_question(
+        run_id: str,
+        question_id: str,
+        payload: QuestionUpdatePayload,
+        session: SessionDependency,
+    ) -> dict[str, object]:
+        try:
+            run = ObfuscationService(session).update_question(run_id, question_id, payload.text)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Question or run not found") from None
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        return {
+            "id": run.id,
+            "prompt_text": run.prompt_text,
+            "questions": run.questions,
+            "question_items": run.question_items,
+        }
+
+    @app.delete("/api/runs/{run_id}/questions/{question_id}", name="api_delete_question")
+    def api_delete_question(
+        run_id: str,
+        question_id: str,
+        session: SessionDependency,
+    ) -> dict[str, object]:
+        try:
+            run = ObfuscationService(session).delete_question(run_id, question_id)
+        except LookupError:
+            raise HTTPException(status_code=404, detail="Question or run not found") from None
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
+        return {
+            "id": run.id if run else None,
+            "prompt_text": run.prompt_text if run else "",
+            "questions": run.questions if run else [],
+            "question_items": run.question_items if run else [],
+        }
 
     @app.post("/api/cases/{case_id}/runs", status_code=201, name="api_create_run")
     def api_create_run(
@@ -860,6 +1017,8 @@ def create_app(
             "id": run.id,
             "prompt_text": run.prompt_text,
             "validation_status": run.validation_status,
+            "questions": run.questions,
+            "question_items": run.question_items,
             "findings": [
                 {"severity": item.severity, "code": item.code, "message": item.message}
                 for item in run.findings
@@ -877,6 +1036,8 @@ def create_app(
             "case_id": run.case_id,
             "prompt_text": run.prompt_text,
             "validation_status": run.validation_status,
+            "questions": run.questions,
+            "question_items": run.question_items,
             "artifacts": [
                 {
                     "type": item.artifact_type,
@@ -938,3 +1099,4 @@ def create_app(
             raise HTTPException(status_code=404, detail="Case not found") from None
 
     return app
+

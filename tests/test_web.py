@@ -361,16 +361,32 @@ def test_rich_clipboard_survives_server_mode_choice(client, fixture_text) -> Non
     assert "<h3>Ответ без маркеров</h3>" in page.text
 
 
-def test_chat_question_without_context_preserves_draft(client) -> None:
+def test_chat_question_before_materials_shows_open_cycle_and_auto_builds_on_material(
+    client, fixture_text
+) -> None:
     case_id = client.post("/api/cases", json={"title": "Новый кейс"}).json()["id"]
     question = "Почему запрос медленный?"
     response = client.post(
         f"/cases/{case_id}/messages",
         data={"text": question, "mode": "auto", "display_name": ""},
+        follow_redirects=False,
     )
-    assert response.status_code == 422
-    assert "Сначала добавьте SQL" in response.text
-    assert question in response.text
+    assert response.status_code == 303
+    page = client.get(f"/cases/{case_id}")
+    assert page.status_code == 200
+    assert question in page.text
+    assert "Ожидаются материалы" in page.text
+    assert 'id="context"' not in page.text
+
+    mat_response = client.post(
+        f"/cases/{case_id}/messages",
+        data={"text": fixture_text("query.sql"), "mode": "auto", "display_name": "query.sql"},
+        follow_redirects=False,
+    )
+    assert mat_response.status_code == 303
+    page_after = client.get(f"/cases/{case_id}")
+    assert "Prompt готов" in page_after.text
+    assert "=== ВОПРОС ===" in page_after.text
 
 
 def test_chat_ambiguous_text_shows_inline_mode_choice(client) -> None:
@@ -386,7 +402,7 @@ def test_chat_ambiguous_text_shows_inline_mode_choice(client) -> None:
     assert payload in response.text
 
 
-def test_context_changed_is_visible_after_new_material(client, fixture_text) -> None:
+def test_new_material_in_open_cycle_auto_rebuilds_prompt(client, fixture_text) -> None:
     case_id = client.post("/api/cases", json={"title": "Новый кейс"}).json()["id"]
     client.post(
         f"/api/cases/{case_id}/messages",
@@ -396,16 +412,80 @@ def test_context_changed_is_visible_after_new_material(client, fixture_text) -> 
         f"/api/cases/{case_id}/messages",
         json={"text": "Проанализируй запрос", "mode": "auto"},
     )
-    client.post(
+    added = client.post(
         f"/api/cases/{case_id}/messages",
         json={"text": '1 - filter("O"."STATUS"=\'OPEN\')', "mode": "auto"},
     )
+    assert added.status_code == 201
+    assert "=== PREDICATES #1:" in added.json()["prompt_text"]
     page = client.get(f"/cases/{case_id}")
-    assert "Контекст изменился" in page.text
-    assert "Предыдущий цикл сохранён" in page.text
+    assert "2 материалов · mapping сохранён в кейсе" in page.text
     assert '<pre id="prompt-copy-' in page.text
     assert '<textarea id="prompt-copy-' not in page.text
     assert "data-pasted-plain" not in page.text
+
+
+def test_inline_edit_and_delete_questions_and_materials_in_open_cycle(
+    client, fixture_text
+) -> None:
+    case_id = client.post("/api/cases", json={"title": "Inline edit"}).json()["id"]
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": fixture_text("query.sql"), "mode": "material", "display_name": "query.sql"},
+    )
+    client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Первый вопрос по ORDERS?", "mode": "question"},
+    )
+    q2 = client.post(
+        f"/api/cases/{case_id}/messages",
+        json={"text": "Второй вопрос по плану?", "mode": "question"},
+    ).json()
+    run_id = q2["run_id"]
+    assert len(q2["questions"]) == 2
+    first_qid = q2["question_items"][0]["id"]
+    second_qid = q2["question_items"][1]["id"]
+
+    # Edit first question via form endpoint
+    edit_res = client.post(
+        f"/runs/{run_id}/questions/{first_qid}/edit",
+        data={"text": "Обновлённый первый вопрос по ORDERS?"},
+        follow_redirects=False,
+    )
+    assert edit_res.status_code == 303
+    run_detail = client.get(f"/api/runs/{run_id}").json()
+    assert run_detail["questions"] == [
+        "Обновлённый первый вопрос по ORDERS?",
+        "Второй вопрос по плану?",
+    ]
+    assert "Обновлённый первый вопрос" in run_detail["prompt_text"]
+    assert (
+        run_detail["prompt_text"].index("=== ВОПРОС #1 ===")
+        < run_detail["prompt_text"].index("=== ВОПРОС #2 ===")
+        < run_detail["prompt_text"].index("=== SQL #1: query.sql ===")
+    )
+
+    # Delete second question via form endpoint
+    del_res = client.post(
+        f"/runs/{run_id}/questions/{second_qid}/delete",
+        follow_redirects=False,
+    )
+    assert del_res.status_code == 303
+    run_detail_after = client.get(f"/api/runs/{run_id}").json()
+    assert run_detail_after["questions"] == ["Обновлённый первый вопрос по ORDERS?"]
+    assert "=== ВОПРОС ===" in run_detail_after["prompt_text"]
+    assert "=== ВОПРОС #2 ===" not in run_detail_after["prompt_text"]
+
+    # Close cycle with an AI response, then verify question cannot be edited
+    client.post(
+        f"/api/runs/{run_id}/responses",
+        json={"text": "Ответ модели", "model_label": "ChatGPT"},
+    )
+    closed_edit = client.post(
+        f"/api/runs/{run_id}/questions/{first_qid}",
+        json={"text": "Попытка изменить закрытый цикл"},
+    )
+    assert closed_edit.status_code == 422
 
 
 def test_large_plan_over_1mb_succeeds_in_multipart_and_revision_forms(

@@ -401,7 +401,11 @@ def _ranges_overlap(start: int, end: int, occurrences: Iterable[TextOccurrence])
 def _fallback_tokens(sql: str, existing: list[TextOccurrence]) -> list[TextOccurrence]:
     result: list[TextOccurrence] = []
     try:
-        tokens = ORACLE_DIALECT.tokenize(sql)
+        lexer_input = Q_QUOTE_RE.sub(
+            lambda match: "'" + ("x" * (len(match.group(0)) - 2)) + "'",
+            sql,
+        )
+        tokens = ORACLE_DIALECT.tokenize(lexer_input)
     except Exception:
         tokens = []
 

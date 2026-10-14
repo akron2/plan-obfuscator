@@ -148,6 +148,36 @@ class ObfuscationRun(Base):
         back_populates="run", cascade="all, delete-orphan"
     )
 
+    @property
+    def question_items(self) -> list[dict[str, str]]:
+        snapshot = self.settings_snapshot if isinstance(self.settings_snapshot, dict) else {}
+        if "questions" in snapshot and isinstance(snapshot["questions"], list):
+            items: list[dict[str, str]] = []
+            for index, raw in enumerate(snapshot["questions"], start=1):
+                if isinstance(raw, dict):
+                    text = str(raw.get("text", "")).strip()
+                    if not text:
+                        continue
+                    items.append(
+                        {
+                            "id": str(raw.get("id") or f"q-{index}"),
+                            "text": text,
+                            "created_at": str(raw.get("created_at") or ""),
+                        }
+                    )
+                elif isinstance(raw, str) and raw.strip():
+                    items.append({"id": f"q-{index}", "text": raw.strip(), "created_at": ""})
+            return items
+        if self.question and self.question.strip():
+            created_str = self.created_at.strftime("%d.%m.%Y %H:%M") if self.created_at else ""
+            return [{"id": "q-1", "text": self.question.strip(), "created_at": created_str}]
+        return []
+
+    @property
+    def questions(self) -> list[str]:
+        return [item["text"] for item in self.question_items]
+
+
 
 class RunArtifact(Base):
     __tablename__ = "run_artifacts"

@@ -55,10 +55,7 @@
         <div class="chat-meta">
           <span>Oracle {{ case.oracle_version }}</span>
           <span>·</span>
-          <button type="button" class="context-link" data-scroll-context>
-            Контекст: {{ active_artifacts|length }}
-            {% if context_changed %}<i class="changed-dot" title="Контекст изменён"></i>{% endif %}
-          </button>
+          <span>Материалов: {{ active_artifacts|length }}</span>
         </div>
       </div>
       <div class="header-actions">
@@ -86,74 +83,44 @@
         {% if notice %}<div class="toast success" role="status">{{ notice }}</div>{% endif %}
         {% if error %}<div class="toast error" role="alert">{{ error }}</div>{% endif %}
 
-        <article class="context-card" id="context" aria-labelledby="context-title">
-          <details>
-            <summary>
-              <span class="context-icon" aria-hidden="true">⌘</span>
-              <span class="context-summary-copy">
-                <strong id="context-title">Контекст кейса</strong>
-                <small>{% if active_artifacts %}{{ active_artifacts|length }} материалов{% else %}Материалы ещё не добавлены{% endif %}</small>
-              </span>
-              <span class="context-badges">
-                {% for artifact_type, count in artifact_counts.items() %}
-                <span class="artifact-badge {{ artifact_type }}">{{ artifact_labels.get(artifact_type, artifact_type) }}{% if count > 1 %} ×{{ count }}{% endif %}</span>
-                {% endfor %}
-                {% if context_changed %}<span class="context-state changed">Изменён</span>{% endif %}
-              </span>
-              <span class="disclosure-icon" aria-hidden="true">⌄</span>
-            </summary>
-            <div class="context-body">
-              {% if active_artifacts %}
-              <div class="context-artifacts">
-                {% for artifact in active_artifacts %}
-                {% set current = artifact.revisions|selectattr('id', 'equalto', artifact.current_revision_id)|first or artifact.revisions[-1] %}
-                <details class="artifact-item">
-                  <summary>
-                    <span class="artifact-badge {{ artifact.detected_type }}">{{ artifact_labels.get(artifact.detected_type, artifact.detected_type) }}</span>
-                    <strong>{{ artifact.display_name }}</strong>
-                    <small>v{{ current.version }} · {{ current.source_text|length }} символов</small>
-                    <span class="disclosure-icon" aria-hidden="true">⌄</span>
-                  </summary>
-                  <div class="artifact-editor">
-                    <form method="post" action="/artifacts/{{ artifact.id }}/revisions" enctype="multipart/form-data"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
-                      <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
-                      <div class="artifact-actions">
-                        <span>{{ artifact.revisions|length }} ревизий</span>
-                        <button type="submit">Сохранить новой ревизией</button>
-                      </div>
-                    </form>
-                    <form method="post" action="/artifacts/{{ artifact.id }}/delete" data-confirm="Удалить материал и его ревизии?"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
-                      <button type="submit" class="text-danger">Удалить материал</button>
-                    </form>
-                  </div>
-                </details>
-                {% endfor %}
-              </div>
-              {% else %}
-              <div class="context-empty">Вставьте SQL, DBMS_XPLAN или SQL Monitor в поле снизу.</div>
-              {% endif %}
-            </div>
-          </details>
-        </article>
+        {% set has_open_cycle = (open_run is not none) or (open_cycle_artifacts|length > 0) %}
 
-        {% if context_changed %}
-        <article class="system-event warning" role="article">
-          <span aria-hidden="true">△</span>
-          <div><strong>Контекст изменился</strong><p>Задайте вопрос, чтобы сформировать новый prompt. Предыдущий цикл сохранён.</p></div>
-        </article>
-        {% endif %}
-
-        {% for run in case.runs %}
+        {% for run in closed_runs %}
+        {% set is_latest_closed = (not has_open_cycle) and latest_run and (run.id == latest_run.id) %}
         <section
-          class="conversation-cycle {% if latest_run and run.id == latest_run.id %}is-latest{% endif %}"
+          class="conversation-cycle closed-cycle {% if is_latest_closed %}is-latest{% endif %}"
           data-conversation-cycle
-          {% if latest_run and run.id == latest_run.id %}id="latest-cycle"{% endif %}
+          {% if is_latest_closed %}id="latest-cycle"{% endif %}
         >
-          {% if run.question %}
+          {% for q in run.question_items %}
           <article class="chat-item user-message" role="article" aria-label="Вопрос пользователя">
-            <div class="message-meta"><span>Вы</span><time>{{ run.created_at.strftime('%d.%m.%Y %H:%M') }}</time></div>
-            <div class="user-bubble">{{ run.question }}</div>
+            <div class="message-meta">
+              <span>Вопрос{% if run.question_items|length > 1 %} #{{ loop.index }}{% endif %}</span>
+              <time>{{ run.created_at.strftime('%d.%m.%Y %H:%M') }}</time>
+            </div>
+            <div class="user-bubble">{{ q.text }}</div>
           </article>
+          {% endfor %}
+
+          {% if run.run_artifacts %}
+          <div class="cycle-materials" aria-label="Материалы цикла">
+            {% for ra in run.run_artifacts %}
+            {% set rev = revision_by_id.get(ra.artifact_revision_id) %}
+            {% if rev %}
+            <details class="artifact-item cycle-artifact readonly">
+              <summary>
+                <span class="artifact-badge {{ ra.artifact_type }}">{{ artifact_labels.get(ra.artifact_type, ra.artifact_type) }}</span>
+                <strong>{{ ra.display_name }}</strong>
+                <small>v{{ rev.version }} · {{ rev.source_text|length }} символов</small>
+                <span class="disclosure-icon" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="artifact-editor">
+                <pre class="code-block">{{ rev.source_text }}</pre>
+              </div>
+            </details>
+            {% endif %}
+            {% endfor %}
+          </div>
           {% endif %}
 
           <article class="chat-item assistant-message prompt-message" role="article" aria-label="Сформированный prompt">
@@ -201,21 +168,119 @@
             </div>
           </article>
           {% endfor %}
+        </section>
+        {% endfor %}
 
-          {% if not run.responses %}
+        {% if has_open_cycle %}
+        <section
+          class="conversation-cycle open-cycle is-latest"
+          data-conversation-cycle
+          id="latest-cycle"
+        >
+          {% if open_run %}
+          {% for q in open_run.question_items %}
+          <article class="chat-item user-message" role="article" aria-label="Вопрос пользователя">
+            <div class="message-meta">
+              <span>Вопрос{% if open_run.question_items|length > 1 %} #{{ loop.index }}{% endif %}</span>
+              <time>{{ open_run.created_at.strftime('%d.%m.%Y %H:%M') }}</time>
+            </div>
+            <div class="user-bubble">{{ q.text }}</div>
+            <details class="question-item-editor">
+              <summary class="question-edit-toggle">Изменить / удалить</summary>
+              <div class="question-editor-body">
+                <form method="post" action="/runs/{{ open_run.id }}/questions/{{ q.id }}/edit"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+                  <textarea name="text" rows="3" required>{{ q.text }}</textarea>
+                  <div class="artifact-actions">
+                    <button type="submit">Сохранить вопрос</button>
+                  </div>
+                </form>
+                <form method="post" action="/runs/{{ open_run.id }}/questions/{{ q.id }}/delete" data-confirm="Удалить вопрос из цикла?"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+                  <button type="submit" class="text-danger">Удалить вопрос</button>
+                </form>
+              </div>
+            </details>
+          </article>
+          {% endfor %}
+          {% endif %}
+
+          {% if open_cycle_artifacts %}
+          <div class="cycle-materials" aria-label="Материалы открытого цикла">
+            {% for artifact in open_cycle_artifacts %}
+            {% set current = artifact.revisions|selectattr('id', 'equalto', artifact.current_revision_id)|first or artifact.revisions[-1] %}
+            <details class="artifact-item cycle-artifact">
+              <summary>
+                <span class="artifact-badge {{ artifact.detected_type }}">{{ artifact_labels.get(artifact.detected_type, artifact.detected_type) }}</span>
+                <strong>{{ artifact.display_name }}</strong>
+                <small>v{{ current.version }} · {{ current.source_text|length }} символов</small>
+                <span class="disclosure-icon" aria-hidden="true">⌄</span>
+              </summary>
+              <div class="artifact-editor">
+                <form method="post" action="/artifacts/{{ artifact.id }}/revisions" enctype="multipart/form-data"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+                  <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
+                  <div class="artifact-actions">
+                    <span>{{ artifact.revisions|length }} ревизий</span>
+                    <button type="submit">Сохранить новой ревизией</button>
+                  </div>
+                </form>
+                <form method="post" action="/artifacts/{{ artifact.id }}/delete" data-confirm="Удалить материал и его ревизии?"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+                  <button type="submit" class="text-danger">Удалить материал</button>
+                </form>
+              </div>
+            </details>
+            {% endfor %}
+          </div>
+          {% endif %}
+
+          {% if open_run and open_run.prompt_text %}
+          <article class="chat-item assistant-message prompt-message" role="article" aria-label="Сформированный prompt">
+            <div class="message-card">
+              <div class="message-card-header">
+                <div><span class="message-kicker">Plan Obfuscator</span><h2>Prompt готов</h2></div>
+                <span class="validation-status {{ open_run.validation_status }}">{{ open_run.validation_status }}</span>
+              </div>
+              <p class="message-description">{{ open_run.run_artifacts|length }} материалов · mapping сохранён в кейсе</p>
+              {% if open_run.findings %}
+              <div class="findings-list">
+                {% for finding in open_run.findings %}
+                <div class="finding-row {{ finding.severity }}"><code>{{ finding.code }}</code><span>{{ finding.message }}</span></div>
+                {% endfor %}
+              </div>
+              {% endif %}
+              <div class="primary-actions">
+                <button type="button" class="copy-primary" data-copy-target="prompt-copy-{{ open_run.id }}" data-prompt-copied>Копировать prompt</button>
+                <details class="inline-details">
+                  <summary>Развернуть</summary>
+                  <pre id="prompt-copy-{{ open_run.id }}" class="code-block">{{ open_run.prompt_text }}</pre>
+                </details>
+              </div>
+            </div>
+          </article>
+
           <article class="system-event waiting" role="article">
             <span aria-hidden="true">↳</span>
-            <div><strong>Ожидается ответ ИИ</strong><p>Скопируйте prompt, отправьте модели и вставьте ответ в поле снизу.</p></div>
+            <div><strong>Ожидается ответ ИИ</strong><p>Скопируйте prompt, отправьте модели и вставьте ответ в поле снизу. До ответа ИИ можно добавлять и редактировать вопросы и материалы.</p></div>
+          </article>
+          {% elif open_run and open_run.question_items %}
+          <article class="system-event waiting" role="article">
+            <span aria-hidden="true">↳</span>
+            <div><strong>Ожидаются материалы</strong><p>Вопросы сохранены ({{ open_run.question_items|length }}). Добавьте SQL, план или SQL Monitor, чтобы автоматически собрать prompt.</p></div>
+          </article>
+          {% elif open_cycle_artifacts %}
+          <article class="system-event waiting" role="article">
+            <span aria-hidden="true">↳</span>
+            <div><strong>Материалы добавлены</strong><p>Задайте вопрос или добавьте ещё материалы, чтобы собрать обезличенный prompt.</p></div>
           </article>
           {% endif %}
         </section>
-        {% else %}
+        {% endif %}
+
+        {% if not closed_runs and not has_open_cycle %}
         <article class="welcome-message" role="article">
           <span class="welcome-icon" aria-hidden="true">◎</span>
-          <h2>Добавьте материалы</h2>
-          <p>Вставьте SQL, план выполнения, SQL Monitor, outline или predicates. Затем задайте вопрос обычным текстом.</p>
+          <h2>Добавьте материалы или вопрос</h2>
+          <p>Вставьте SQL, план выполнения, SQL Monitor или задайте вопрос в любом порядке. В итоговом prompt вопросы всегда будут перед материалами.</p>
         </article>
-        {% endfor %}
+        {% endif %}
         <div id="latest" aria-hidden="true"></div>
       </div>
     </section>

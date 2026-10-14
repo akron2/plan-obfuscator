@@ -90,6 +90,9 @@ class SymbolRegistry:
                 max_sequence = entry.sequence
         self._next_sequence = max_sequence + 1
 
+    def entries(self) -> list[SymbolEntry]:
+        return list(self._cache.values())
+
     def get_or_create(self, occurrence: TextOccurrence) -> SymbolEntry:
         key = (occurrence.entity_type.value, occurrence.canonical)
         symbol = self._cache.get(key)

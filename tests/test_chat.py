@@ -9,7 +9,6 @@ from plan_obfuscator.services.chat import (
     NEW_CASE_TITLE,
     AmbiguousInputError,
     ComposerMode,
-    MissingContextError,
     MissingRunError,
     SubmissionKind,
     title_from_question,
@@ -47,10 +46,35 @@ def test_universal_composer_material_question_response_flow(db_session, fixture_
     assert answer.response.restored_text == "Проверьте full scan таблицы orders."
 
 
-def test_question_requires_context(db_session) -> None:
+def test_questions_before_materials_auto_build_prompt_when_material_added(
+    db_session, fixture_text
+) -> None:
     case = CaseService(db_session).create_case(NEW_CASE_TITLE)
-    with pytest.raises(MissingContextError, match="Сначала добавьте"):
-        ChatService(db_session).submit(case.id, "Почему запрос медленный?")
+    chat = ChatService(db_session)
+
+    q1 = chat.submit(case.id, "Почему запрос медленный?")
+    assert q1.kind == SubmissionKind.QUESTION
+    assert q1.run is not None
+    assert q1.run.prompt_text == ""
+    assert q1.run.questions == ["Почему запрос медленный?"]
+
+    q2 = chat.submit(case.id, "Нужен ли составной индекс?")
+    assert q2.kind == SubmissionKind.QUESTION
+    assert q2.run is not None
+    assert q2.run.id == q1.run.id
+    assert q2.run.prompt_text == ""
+    assert q2.run.questions == ["Почему запрос медленный?", "Нужен ли составной индекс?"]
+
+    mat = chat.submit(case.id, fixture_text("query.sql"))
+    assert mat.kind == SubmissionKind.MATERIAL
+    assert mat.run is not None
+    assert mat.run.id == q1.run.id
+    assert mat.run.prompt_text != ""
+    assert (
+        mat.run.prompt_text.index("=== ВОПРОС #1 ===")
+        < mat.run.prompt_text.index("=== ВОПРОС #2 ===")
+        < mat.run.prompt_text.index("=== SQL #1:")
+    )
 
 
 def test_response_requires_run(db_session, fixture_text) -> None:

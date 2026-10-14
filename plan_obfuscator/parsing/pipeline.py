@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from .detector import detect_artifact_kind
 from .monitor import extract_sql_monitor_sql, parse_sql_monitor
-from .sql import parse_expression_fragment, parse_hint_fragment, parse_sql
+from .sql import Q_QUOTE_RE, parse_expression_fragment, parse_hint_fragment, parse_sql
 from .types import ArtifactKind, EntityType, ParsedArtifact, ParseFinding, TextOccurrence
 from .utils import make_occurrence
 from .xplan import extract_xplan_sql, parse_xplan
@@ -213,6 +213,10 @@ def _sql_region_end(source: str) -> int:
                     continue
                 quote = ""
             index += 1
+            continue
+        q_match = Q_QUOTE_RE.match(source, index)
+        if q_match:
+            index = q_match.end()
             continue
         if character in {"'", '"'}:
             quote = character

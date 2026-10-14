@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import re
 import uuid
+from collections.abc import Iterable
 from dataclasses import dataclass
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session, defer, selectinload
 
 from ..models import (
     Artifact,
@@ -53,6 +54,18 @@ LEAK_CHECK_TYPES = {
     EntityType.MODULE.value,
     EntityType.ACTION.value,
     EntityType.SQL_ID.value,
+}
+
+ENTITY_MASK_PRIORITY = {
+    EntityType.TABLE.value: 1,
+    EntityType.VIEW.value: 2,
+    EntityType.INDEX.value: 3,
+    EntityType.SCHEMA.value: 4,
+    EntityType.CONSTRAINT.value: 5,
+    EntityType.PARTITION.value: 6,
+    EntityType.DB_LINK.value: 7,
+    EntityType.SQL_ID.value: 8,
+    EntityType.COLUMN.value: 9,
 }
 
 LEAK_CHECK_ALLOWLIST = {
@@ -142,8 +155,79 @@ def exact_restore(obfuscated: str, replacements: list[AppliedReplacement]) -> st
     return "".join(parts)
 
 
-def _reconcile_across_artifacts(parsed_items: list[ParsedArtifact]) -> None:
+def mask_question_symbols(
+    question: str,
+    token_prefix: str,
+    symbols: Iterable[Symbol | SymbolEntry],
+) -> str:
+    if not question or not question.strip():
+        return ""
+    eligible = sorted(
+        (sym for sym in symbols if sym.entity_type in LEAK_CHECK_TYPES),
+        key=lambda sym: (ENTITY_MASK_PRIORITY.get(sym.entity_type, 50), sym.sequence),
+    )
+    if not eligible:
+        return question
+
+    word_map: dict[str, str] = {}
+    complex_candidates: dict[str, tuple[str, str]] = {}
+    for sym in eligible:
+        raw = sym.preferred_original.strip()
+        is_quoted = len(raw) >= 2 and raw[0] == '"' and raw[-1] == '"'
+        unquoted = raw[1:-1].replace('""', '"') if is_quoted else raw
+        for candidate in (raw, unquoted):
+            if len(candidate) < 3:
+                continue
+            upper = candidate.upper()
+            if upper in LEAK_CHECK_ALLOWLIST:
+                continue
+            if WORD_TOKEN_RE.fullmatch(candidate):
+                word_map.setdefault(upper, sym.marker)
+            else:
+                complex_candidates.setdefault(upper, (candidate, sym.marker))
+
+    result = question
+    if complex_candidates:
+        for candidate, marker in sorted(
+            complex_candidates.values(),
+            key=lambda pair: len(pair[0]),
+            reverse=True,
+        ):
+            pattern = re.compile(
+                rf"(?<![A-Za-z0-9_$#]){re.escape(candidate)}(?![A-Za-z0-9_$#])",
+                re.IGNORECASE,
+            )
+            result = pattern.sub(marker, result)
+
+    if word_map:
+        marker_prefix_upper = f"OBF_{token_prefix}_".upper()
+
+        def _replace_word(match: re.Match[str]) -> str:
+            word = match.group(0)
+            if len(word) < 3:
+                return word
+            upper = word.upper()
+            if upper.startswith(marker_prefix_upper):
+                return word
+            return word_map.get(upper, word)
+
+        result = WORD_TOKEN_RE.sub(_replace_word, result)
+    return result
+
+
+def _reconcile_across_artifacts(
+    parsed_items: list[ParsedArtifact],
+    existing_symbols: Iterable[Symbol | SymbolEntry] = (),
+) -> None:
     semantic_by_canonical: dict[str, set[EntityType]] = {}
+    for sym in existing_symbols:
+        try:
+            etype = EntityType(sym.entity_type)
+        except ValueError:
+            continue
+        if etype not in {EntityType.IDENTIFIER, EntityType.FRAGMENT}:
+            semantic_by_canonical.setdefault(sym.canonical_value, set()).add(etype)
+
     for parsed in parsed_items:
         for item in parsed.occurrences:
             if item.entity_type not in {EntityType.IDENTIFIER, EntityType.FRAGMENT}:
@@ -250,6 +334,10 @@ class ObfuscationService:
             .execution_options(populate_existing=True)
             .options(
                 selectinload(Case.artifacts).selectinload(Artifact.revisions),
+                selectinload(Case.runs)
+                .selectinload(ObfuscationRun.run_artifacts)
+                .options(defer(RunArtifact.obfuscated_text)),
+                selectinload(Case.runs).selectinload(ObfuscationRun.responses),
             )
         )
         if case is None:
@@ -265,63 +353,165 @@ class ObfuscationService:
             raise ValueError(f"Artifact {artifact.id} has no revisions")
         return max(artifact.revisions, key=lambda revision: revision.version)
 
-    def run(self, case_id: str, question: str = "") -> ObfuscationRun:
-        case = self._load_case(case_id)
-        active_artifacts = [artifact for artifact in case.artifacts if artifact.is_active]
-        if not active_artifacts:
-            raise ValueError("Case has no artifacts")
-
-        ordered_artifacts = sorted(
-            active_artifacts,
-            key=lambda item: (TYPE_ORDER.get(item.detected_type, 99), item.created_at),
+    @staticmethod
+    def _cycle_state(
+        case: Case,
+    ) -> tuple[list[ObfuscationRun], ObfuscationRun | None, list[Artifact]]:
+        ordered_runs = sorted(case.runs, key=lambda item: item.created_at)
+        closed_runs = [item for item in ordered_runs if item.responses]
+        open_runs = [item for item in ordered_runs if not item.responses]
+        open_run = open_runs[-1] if open_runs else None
+        sent_revision_ids = {
+            ra.artifact_revision_id
+            for closed in closed_runs
+            for ra in closed.run_artifacts
+        }
+        unsent_artifacts = sorted(
+            [
+                artifact
+                for artifact in case.artifacts
+                if artifact.is_active and artifact.current_revision_id not in sent_revision_ids
+            ],
+            key=lambda item: item.created_at,
         )
+        return closed_runs, open_run, unsent_artifacts
+
+    def _populate_run(
+        self,
+        case: Case,
+        run: ObfuscationRun,
+        question_items: list[dict[str, str]],
+        ordered_artifacts: list[Artifact],
+        *,
+        has_closed_runs: bool,
+        is_new_run: bool,
+    ) -> ObfuscationRun:
         revisions = [self._current_revision(artifact) for artifact in ordered_artifacts]
-        parsed_items = [
-            parse_artifact(revision.source_text, artifact.detected_type)
-            for artifact, revision in zip(ordered_artifacts, revisions, strict=True)
-        ]
-        _reconcile_across_artifacts(parsed_items)
+        existing_ordered = sorted(run.run_artifacts, key=lambda item: item.position)
+        artifacts_unchanged = (
+            not is_new_run
+            and [ra.artifact_revision_id for ra in existing_ordered]
+            == [rev.id for rev in revisions]
+            and [ra.display_name for ra in existing_ordered]
+            == [artifact.display_name for artifact in ordered_artifacts]
+        )
+        if artifacts_unchanged:
+            registry = SymbolRegistry(self.session, case)
+            masked_questions = [
+                mask_question_symbols(item["text"], case.token_prefix, registry.entries())
+                for item in question_items
+            ]
+            loaded_ras = list(
+                self.session.scalars(
+                    select(RunArtifact)
+                    .where(RunArtifact.run_id == run.id)
+                    .execution_options(populate_existing=True)
+                    .order_by(RunArtifact.position)
+                )
+            )
+            can_build_prompt = bool(loaded_ras) or (has_closed_runs and bool(masked_questions))
+            if can_build_prompt:
+                prompt = build_prompt(
+                    [
+                        PromptArtifact(
+                            artifact_type=ra.artifact_type,
+                            display_name=ra.display_name,
+                            text=ra.obfuscated_text,
+                        )
+                        for ra in loaded_ras
+                    ],
+                    questions=masked_questions,
+                )
+                if run.validation_status == "pending":
+                    run.validation_status = "ok"
+            else:
+                prompt = ""
+                run.validation_status = "pending"
+            run.question = "\n\n".join(item["text"] for item in question_items)
+            run.prompt_text = prompt
+            run.settings_snapshot = {
+                "oracle_version": case.oracle_version,
+                "artifact_count": len(loaded_ras),
+                "automatic_mapping": True,
+                "questions": question_items,
+            }
+            case.updated_at = utc_now()
+            self.session.commit()
+            return self.get_run(run.id, include_replacements=False)
+
+        if not is_new_run:
+            self.session.execute(
+                delete(ReplacementOccurrence).where(
+                    ReplacementOccurrence.run_artifact_id.in_(
+                        select(RunArtifact.id).where(RunArtifact.run_id == run.id)
+                    )
+                )
+            )
+            self.session.execute(delete(RunArtifact).where(RunArtifact.run_id == run.id))
+            self.session.execute(
+                delete(Finding).where(Finding.run_id == run.id, Finding.response_id.is_(None))
+            )
+            self.session.flush()
 
         registry = SymbolRegistry(self.session, case)
         transformed: list[tuple[Artifact, ArtifactRevision, ParsedArtifact, ObfuscatedText]] = []
-        for artifact, revision, parsed in zip(
-            ordered_artifacts, revisions, parsed_items, strict=True
-        ):
-            pairs = [(item, registry.get_or_create(item)) for item in parsed.occurrences]
-            obfuscated = apply_replacements(revision.source_text, pairs)
-            if exact_restore(obfuscated.text, obfuscated.replacements) != revision.source_text:
-                raise AssertionError("Exact round-trip validation failed")
-            parsed.findings.extend(_post_transform_findings(case, revision.source_text, obfuscated))
-            transformed.append((artifact, revision, parsed, obfuscated))
+        if ordered_artifacts:
+            parsed_items = [
+                parse_artifact(revision.source_text, artifact.detected_type)
+                for artifact, revision in zip(ordered_artifacts, revisions, strict=True)
+            ]
+            _reconcile_across_artifacts(parsed_items, existing_symbols=registry.entries())
 
-        registry.persist()
-
-        prompt = build_prompt(
-            [
-                PromptArtifact(
-                    artifact_type=artifact.detected_type,
-                    display_name=artifact.display_name,
-                    text=obfuscated.text,
+            for artifact, revision, parsed in zip(
+                ordered_artifacts, revisions, parsed_items, strict=True
+            ):
+                pairs = [(item, registry.get_or_create(item)) for item in parsed.occurrences]
+                obfuscated = apply_replacements(revision.source_text, pairs)
+                if exact_restore(obfuscated.text, obfuscated.replacements) != revision.source_text:
+                    raise AssertionError("Exact round-trip validation failed")
+                parsed.findings.extend(
+                    _post_transform_findings(case, revision.source_text, obfuscated)
                 )
-                for artifact, _revision, _parsed, obfuscated in transformed
-            ],
-            question=question,
-        )
-        finding_count = sum(len(parsed.findings) for _a, _r, parsed, _o in transformed)
-        run = ObfuscationRun(
-            case_id=case.id,
-            question=question.strip(),
-            prompt_text=prompt,
-            parser_version=PARSER_VERSION,
-            token_scheme_version=TOKEN_SCHEME_VERSION,
-            settings_snapshot={
-                "oracle_version": case.oracle_version,
-                "artifact_count": len(transformed),
-                "automatic_mapping": True,
-            },
-            validation_status="warning" if finding_count else "ok",
-        )
-        self.session.add(run)
+                transformed.append((artifact, revision, parsed, obfuscated))
+
+            registry.persist()
+
+        masked_questions = [
+            mask_question_symbols(item["text"], case.token_prefix, registry.entries())
+            for item in question_items
+        ]
+        can_build_prompt = bool(transformed) or (has_closed_runs and bool(masked_questions))
+        if can_build_prompt:
+            prompt = build_prompt(
+                [
+                    PromptArtifact(
+                        artifact_type=artifact.detected_type,
+                        display_name=artifact.display_name,
+                        text=obfuscated.text,
+                    )
+                    for artifact, _revision, _parsed, obfuscated in transformed
+                ],
+                questions=masked_questions,
+            )
+            finding_count = sum(len(parsed.findings) for _a, _r, parsed, _o in transformed)
+            validation_status = "warning" if finding_count else "ok"
+        else:
+            prompt = ""
+            validation_status = "pending"
+
+        run.question = "\n\n".join(item["text"] for item in question_items)
+        run.prompt_text = prompt
+        run.parser_version = PARSER_VERSION
+        run.token_scheme_version = TOKEN_SCHEME_VERSION
+        run.settings_snapshot = {
+            "oracle_version": case.oracle_version,
+            "artifact_count": len(transformed),
+            "automatic_mapping": True,
+            "questions": question_items,
+        }
+        run.validation_status = validation_status
+        if is_new_run:
+            self.session.add(run)
         case.updated_at = utc_now()
         self.session.flush()
 
@@ -383,6 +573,141 @@ class ObfuscationService:
         self.session.commit()
         return self.get_run(run.id, include_replacements=False)
 
+    def sync_open_run(self, case_id: str) -> ObfuscationRun | None:
+        case = self._load_case(case_id)
+        closed_runs, open_run, unsent_artifacts = self._cycle_state(case)
+        question_items = list(open_run.question_items) if open_run is not None else []
+        if not unsent_artifacts and not question_items:
+            if open_run is not None:
+                self.session.delete(open_run)
+                case.updated_at = utc_now()
+                self.session.commit()
+            return None
+
+        is_new_run = open_run is None
+        target_run = (
+            open_run
+            if open_run is not None
+            else ObfuscationRun(
+                id=new_uuid(),
+                case_id=case.id,
+                question="",
+                prompt_text="",
+                parser_version=PARSER_VERSION,
+                token_scheme_version=TOKEN_SCHEME_VERSION,
+                settings_snapshot={},
+                validation_status="pending",
+            )
+        )
+        return self._populate_run(
+            case,
+            target_run,
+            question_items,
+            unsent_artifacts,
+            has_closed_runs=bool(closed_runs),
+            is_new_run=is_new_run,
+        )
+
+    def add_question(self, case_id: str, question: str) -> ObfuscationRun:
+        clean_question = question.strip()
+        if not clean_question:
+            raise ValueError("Текст вопроса не может быть пустым.")
+        case = self._load_case(case_id)
+        closed_runs, open_run, unsent_artifacts = self._cycle_state(case)
+        question_items = list(open_run.question_items) if open_run is not None else []
+        question_items.append(
+            {
+                "id": new_uuid(),
+                "text": clean_question,
+                "created_at": utc_now().strftime("%d.%m.%Y %H:%M"),
+            }
+        )
+        is_new_run = open_run is None
+        target_run = (
+            open_run
+            if open_run is not None
+            else ObfuscationRun(
+                id=new_uuid(),
+                case_id=case.id,
+                question="",
+                prompt_text="",
+                parser_version=PARSER_VERSION,
+                token_scheme_version=TOKEN_SCHEME_VERSION,
+                settings_snapshot={},
+                validation_status="pending",
+            )
+        )
+        return self._populate_run(
+            case,
+            target_run,
+            question_items,
+            unsent_artifacts,
+            has_closed_runs=bool(closed_runs),
+            is_new_run=is_new_run,
+        )
+
+    def update_question(self, run_id: str, question_id: str, text: str) -> ObfuscationRun:
+        clean_text = text.strip()
+        if not clean_text:
+            raise ValueError("Текст вопроса не может быть пустым.")
+        run = self.get_run(run_id, include_replacements=False)
+        if run.responses:
+            raise ValueError("Нельзя редактировать вопрос в закрытом цикле.")
+        case = self._load_case(run.case_id)
+        closed_runs, open_run, unsent_artifacts = self._cycle_state(case)
+        if open_run is None or open_run.id != run.id:
+            raise ValueError("Нельзя редактировать вопрос в закрытом цикле.")
+        question_items = list(open_run.question_items)
+        updated = False
+        for item in question_items:
+            if item["id"] == question_id:
+                item["text"] = clean_text
+                updated = True
+                break
+        if not updated:
+            raise LookupError(question_id)
+        return self._populate_run(
+            case,
+            open_run,
+            question_items,
+            unsent_artifacts,
+            has_closed_runs=bool(closed_runs),
+            is_new_run=False,
+        )
+
+    def delete_question(self, run_id: str, question_id: str) -> ObfuscationRun | None:
+        run = self.get_run(run_id, include_replacements=False)
+        if run.responses:
+            raise ValueError("Нельзя удалить вопрос из закрытого цикла.")
+        case = self._load_case(run.case_id)
+        closed_runs, open_run, unsent_artifacts = self._cycle_state(case)
+        if open_run is None or open_run.id != run.id:
+            raise ValueError("Нельзя удалить вопрос из закрытого цикла.")
+        question_items = [item for item in open_run.question_items if item["id"] != question_id]
+        if len(question_items) == len(open_run.question_items):
+            raise LookupError(question_id)
+        if not question_items and not unsent_artifacts:
+            self.session.delete(open_run)
+            case.updated_at = utc_now()
+            self.session.commit()
+            return None
+        return self._populate_run(
+            case,
+            open_run,
+            question_items,
+            unsent_artifacts,
+            has_closed_runs=bool(closed_runs),
+            is_new_run=False,
+        )
+
+    def run(self, case_id: str, question: str = "") -> ObfuscationRun:
+        if question.strip():
+            return self.add_question(case_id, question.strip())
+        synced = self.sync_open_run(case_id)
+        if synced is None:
+            raise ValueError("Case has no artifacts")
+        return synced
+
     def get_run(self, run_id: str, *, include_replacements: bool = True) -> ObfuscationRun:
         run_artifacts_loader = selectinload(ObfuscationRun.run_artifacts)
         case_loader = selectinload(ObfuscationRun.case)
@@ -392,6 +717,7 @@ class ObfuscationService:
         run = self.session.scalar(
             select(ObfuscationRun)
             .where(ObfuscationRun.id == run_id)
+            .execution_options(populate_existing=True)
             .options(
                 run_artifacts_loader,
                 selectinload(ObfuscationRun.responses),
@@ -431,4 +757,5 @@ class ObfuscationService:
             cursor = output_end
         parts.append(obfuscated[cursor:])
         return "".join(parts)
+
 

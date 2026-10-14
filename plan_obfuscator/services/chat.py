@@ -202,26 +202,27 @@ class ChatService:
                     kind=regions[0].kind if regions else classification.artifact_kind,
                 )
                 artifacts = (artifact,)
+            latest = self.latest_run(case.id)
+            updated_run: ObfuscationRun | None = None
+            if latest is not None and not latest.responses:
+                updated_run = ObfuscationService(self.session).sync_open_run(case.id)
             return ChatSubmission(
                 kind=kind,
                 classification=classification,
                 artifact=artifacts[0],
                 artifacts=artifacts,
+                run=updated_run,
             )
 
         if kind == SubmissionKind.QUESTION:
-            if not any(artifact.is_active for artifact in case.artifacts):
-                raise MissingContextError(
-                    "Сначала добавьте SQL, план или другой диагностический материал."
-                )
             if case.title == NEW_CASE_TITLE:
                 case.title = title_from_question(clean_text)
                 self.session.flush()
-            run = ObfuscationService(self.session).run(case.id, clean_text)
+            run = ObfuscationService(self.session).add_question(case.id, clean_text)
             return ChatSubmission(kind=kind, classification=classification, run=run)
 
         latest_run = self.latest_run(case.id)
-        if latest_run is None:
+        if latest_run is None or not latest_run.prompt_text:
             raise MissingRunError("Сначала сформируйте prompt вопросом к модели.")
         response = ResponseService(self.session).create_response(
             latest_run.id,
@@ -234,3 +235,4 @@ class ChatService:
             classification=classification,
             response=response,
         )
+

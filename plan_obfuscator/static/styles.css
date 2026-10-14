@@ -96,14 +96,8 @@ pre { margin: 0; }
 .toast.success { border-color: rgba(93, 214, 164, 0.25); background: rgba(93, 214, 164, 0.07); color: #9de7c9; }
 .toast.error { border-color: rgba(255, 119, 134, 0.28); background: rgba(255, 119, 134, 0.08); color: #ff9daa; }
 
-.context-card { margin-bottom: 26px; border: 1px solid var(--line); border-radius: 13px; background: rgba(20, 24, 30, 0.82); }
-.context-card > details > summary { display: flex; align-items: center; gap: 11px; min-height: 64px; padding: 12px 15px; list-style: none; cursor: pointer; }
-.context-card summary::-webkit-details-marker, .artifact-item summary::-webkit-details-marker { display: none; }
-.context-icon { display: grid; place-items: center; width: 34px; height: 34px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
-.context-summary-copy { min-width: 120px; }
-.context-summary-copy strong { display: block; font-size: 0.82rem; }
-.context-summary-copy small { display: block; margin-top: 3px; color: var(--muted); font-size: 0.68rem; }
-.context-badges { display: flex; flex: 1; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.cycle-materials { display: grid; gap: 8px; }
+.artifact-item summary::-webkit-details-marker, .question-item-editor summary::-webkit-details-marker { display: none; }
 .artifact-badge, .context-state { display: inline-flex; align-items: center; min-height: 23px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px; background: #0d1014; color: var(--muted-strong); font: 650 0.62rem ui-monospace, SFMono-Regular, Consolas, monospace; }
 .artifact-badge.sql { border-color: rgba(93, 214, 164, 0.25); color: #80dbb5; }
 .artifact-badge.xplan { border-color: rgba(142, 161, 255, 0.28); color: #a8b5ff; }
@@ -111,18 +105,15 @@ pre { margin: 0; }
 .context-state.changed { border-color: rgba(240, 198, 107, 0.25); background: rgba(240, 198, 107, 0.07); color: var(--warning); }
 .disclosure-icon { margin-left: 3px; color: var(--muted); transition: transform 140ms ease; }
 details[open] > summary .disclosure-icon { transform: rotate(180deg); }
-.context-body { padding: 0 14px 14px; border-top: 1px solid var(--line); }
-.context-artifacts { display: grid; gap: 7px; padding-top: 12px; }
 .artifact-item { border: 1px solid var(--line); border-radius: 9px; background: #0e1115; }
 .artifact-item > summary { display: flex; align-items: center; gap: 9px; padding: 10px; list-style: none; cursor: pointer; }
 .artifact-item > summary strong { min-width: 0; flex: 1; overflow: hidden; font-size: 0.76rem; text-overflow: ellipsis; white-space: nowrap; }
 .artifact-item > summary small { color: var(--muted); font-size: 0.65rem; }
 .artifact-editor { padding: 10px; border-top: 1px solid var(--line); content-visibility: auto; contain-intrinsic-size: auto 260px; }
-.artifact-editor textarea { width: 100%; resize: vertical; padding: 10px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #080a0d; color: #cbd4dc; font: 0.72rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
+.artifact-editor textarea, .question-editor-body textarea { width: 100%; resize: vertical; padding: 10px; border: 1px solid var(--line); border-radius: 8px; outline: 0; background: #080a0d; color: #cbd4dc; font: 0.72rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
 .artifact-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; color: var(--muted); font-size: 0.65rem; }
 .artifact-actions button { padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-raised); color: var(--text); cursor: pointer; font-size: 0.68rem; }
 .text-danger { margin-top: 9px; padding: 0; border: 0; background: transparent; color: var(--danger); cursor: pointer; font-size: 0.68rem; }
-.context-empty { padding: 22px 6px 8px; color: var(--muted); font-size: 0.76rem; text-align: center; }
 
 .conversation-cycle { display: grid; gap: 16px; margin-bottom: 30px; }
 .app-layout[data-history-mode="latest"] .conversation-cycle:not(.is-latest) { display: none; }
@@ -131,6 +122,10 @@ details[open] > summary .disclosure-icon { transform: rotate(180deg); }
 .message-meta { display: flex; gap: 8px; margin: 0 5px 6px; color: var(--muted); font-size: 0.64rem; }
 .message-meta time { color: #65717d; }
 .user-bubble { max-width: 760px; padding: 11px 14px; border: 1px solid rgba(142, 161, 255, 0.2); border-radius: 14px 14px 4px 14px; background: var(--accent-soft); color: #e8ecff; font-size: 0.84rem; line-height: 1.55; white-space: pre-wrap; }
+.question-item-editor { width: min(100%, 560px); margin-top: 6px; text-align: right; }
+.question-edit-toggle { display: inline-block; padding: 2px 6px; color: var(--muted); cursor: pointer; font-size: 0.64rem; list-style: none; }
+.question-edit-toggle:hover { color: var(--text); }
+.question-editor-body { margin-top: 6px; padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: #0e1115; text-align: left; }
 .assistant-message { align-items: stretch; padding-right: 8%; }
 .message-card { padding: 16px; border: 1px solid var(--line); border-radius: 14px 14px 14px 4px; background: rgba(21, 25, 31, 0.9); }
 .message-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; }
