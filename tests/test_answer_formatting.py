@@ -134,6 +134,10 @@ def test_html_is_used_only_for_the_matching_plain_clipboard_payload() -> None:
         pasted_plain=plain.replace("\n", "\r\n"),
         pasted_html=html,
     )
+    without_duplicate_plain = prepare_answer_markdown(
+        plain,
+        pasted_html=html,
+    )
     edited = prepare_answer_markdown(
         plain + "\nКомментарий",
         pasted_plain=plain,
@@ -141,6 +145,7 @@ def test_html_is_used_only_for_the_matching_plain_clipboard_payload() -> None:
     )
 
     assert "| A | B |" in converted
+    assert "| A | B |" in without_duplicate_plain
     assert edited.endswith("Комментарий")
     assert "| A | B |" not in edited
 

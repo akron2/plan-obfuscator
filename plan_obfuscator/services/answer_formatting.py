@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
-MAX_CLIPBOARD_HTML_CHARS = 2 * 1024 * 1024
+MAX_CLIPBOARD_HTML_CHARS = 10 * 1024 * 1024
 
 MARKER_RE = re.compile(
     r"(?<![A-Za-z0-9_])OBF_[A-Za-z0-9]+(?:_[A-Za-z0-9]+)+(?![A-Za-z0-9_])",
@@ -597,10 +597,10 @@ def prepare_answer_markdown(
     pasted_plain: str = "",
     pasted_html: str = "",
 ) -> str:
+    plain_matches = not pasted_plain or normalize_newlines(pasted_plain) == normalize_newlines(text)
     if (
         pasted_html
-        and pasted_plain
-        and normalize_newlines(pasted_plain) == normalize_newlines(text)
+        and plain_matches
         and len(pasted_html) <= MAX_CLIPBOARD_HTML_CHARS
     ):
         try:

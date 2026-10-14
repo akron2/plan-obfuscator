@@ -6,8 +6,19 @@ const composerMode = document.querySelector("[data-composer-mode]");
 const detectedKind = document.querySelector("[data-detected-kind]");
 const fileInput = document.querySelector("[data-file-input]");
 const selectedFile = document.querySelector("[data-selected-file]");
-const pastedPlain = document.querySelector("[data-pasted-plain]");
 const pastedHtml = document.querySelector("[data-pasted-html]");
+const DETECTION_SAMPLE_CHARS = 32768;
+const MAX_CLIPBOARD_HTML_CHARS = 10 * 1024 * 1024;
+let lastPastedPlain = composerInput && pastedHtml?.value ? composerInput.value : null;
+
+function normalizeNewlines(value) {
+  return value.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+}
+
+function clearPastedHtml() {
+  lastPastedPlain = null;
+  if (pastedHtml) pastedHtml.value = "";
+}
 
 function copyTextFrom(target) {
   return target?.value ?? target?.textContent ?? "";
@@ -35,6 +46,9 @@ document.addEventListener("click", async (event) => {
   const forceMode = event.target.closest("[data-force-mode]");
   if (forceMode && composerMode) {
     composerMode.value = forceMode.dataset.forceMode;
+    if (composerMode.value === "material" || composerMode.value === "question") {
+      clearPastedHtml();
+    }
     forceMode.closest(".classification-prompt")?.remove();
     updateDetection();
     composerInput?.focus();
@@ -106,10 +120,27 @@ function autoGrow() {
 }
 
 function looksLikeMaterial(text) {
-  const trimmed = text.trim();
-  return /^(?:\/\*[\s\S]*?\*\/\s*)*(?:select|with|insert|update|delete|merge|explain|begin|declare)\b/i.test(trimmed)
-    || /(?:SQL Monitoring Report|Plan hash value|Predicate Information|BEGIN_OUTLINE_DATA)/i.test(trimmed)
-    || /^\s*\|\s*Id\s*\|\s*Operation\s*\|/im.test(trimmed);
+  const sample = text.slice(0, DETECTION_SAMPLE_CHARS).trimStart();
+  return /^(?:\/\*[\s\S]*?\*\/\s*|--[^\r\n]*(?:\r?\n|$)\s*)*(?:select|with|insert|update|delete|merge|explain|begin|declare|create|alter)\b/i.test(sample)
+    || /(?:SQL Monitoring Report|Plan hash value|Predicate Information|BEGIN_OUTLINE_DATA|EXPLAINED SQL STATEMENT)/i.test(sample)
+    || /^\s*\|\s*Id\s*\|\s*Operation\s*\|/im.test(sample);
+}
+
+function hasAtLeastLines(text, minLines) {
+  let count = 1;
+  let index = -1;
+  while (count < minLines && (index = text.indexOf("\n", index + 1)) !== -1) {
+    count += 1;
+  }
+  return count >= minLines;
+}
+
+function shouldCaptureClipboardHtml(plain, html) {
+  if (!plain || !html || html.length > MAX_CLIPBOARD_HTML_CHARS) return false;
+  const mode = composerMode?.value || "auto";
+  if (mode === "material" || mode === "question") return false;
+  if (mode === "response") return true;
+  return !looksLikeMaterial(plain);
 }
 
 function inferredMode() {
@@ -120,13 +151,14 @@ function inferredMode() {
     return [selected, labels[selected] || selected];
   }
   const text = composerInput?.value || "";
-  if (!text.trim()) return ["auto", "Auto"];
-  if (looksLikeMaterial(text)) return ["material", "Auto · материал"];
+  const sample = text.slice(0, DETECTION_SAMPLE_CHARS);
+  if (!sample.trim()) return ["auto", "Auto"];
+  if (looksLikeMaterial(sample)) return ["material", "Auto · материал"];
   const prefix = composer?.dataset.casePrefix;
-  if (prefix && new RegExp(`\\bOBF_${prefix}_[A-Z0-9_]+`, "i").test(text)) {
+  if (prefix && new RegExp(`\\bOBF_${prefix}_[A-Z0-9_]+`, "i").test(sample)) {
     return ["response", "Auto · ответ ИИ"];
   }
-  if (text.length >= 400 || text.split(/\r?\n/).length >= 9) return ["auto", "Auto · не уверен"];
+  if (text.length >= 400 || hasAtLeastLines(sample, 9)) return ["auto", "Auto · не уверен"];
   return ["question", "Auto · вопрос"];
 }
 
@@ -140,11 +172,23 @@ function updateDetection() {
 if (composerInput) {
   composerInput.addEventListener("paste", (event) => {
     const clipboard = event.clipboardData;
-    if (!clipboard || !pastedPlain || !pastedHtml) return;
-    pastedPlain.value = clipboard.getData("text/plain") || "";
-    pastedHtml.value = clipboard.getData("text/html") || "";
+    if (!clipboard || !pastedHtml) return;
+    const plain = clipboard.getData("text/plain") || "";
+    const html = clipboard.getData("text/html") || "";
+    if (shouldCaptureClipboardHtml(plain, html)) {
+      lastPastedPlain = plain;
+      pastedHtml.value = html;
+    } else {
+      clearPastedHtml();
+    }
   });
   composerInput.addEventListener("input", () => {
+    if (
+      lastPastedPlain !== null
+      && normalizeNewlines(composerInput.value) !== normalizeNewlines(lastPastedPlain)
+    ) {
+      clearPastedHtml();
+    }
     autoGrow();
     updateDetection();
   });
@@ -156,7 +200,12 @@ if (composerInput) {
   });
   autoGrow();
 }
-composerMode?.addEventListener("change", updateDetection);
+composerMode?.addEventListener("change", () => {
+  if (composerMode.value === "material" || composerMode.value === "question") {
+    clearPastedHtml();
+  }
+  updateDetection();
+});
 
 function showSelectedFile() {
   const file = fileInput?.files?.[0];

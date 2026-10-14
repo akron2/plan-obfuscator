@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 import secrets
-from collections.abc import Iterator
-from contextlib import asynccontextmanager
+from collections.abc import Callable, Coroutine, Iterator
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
+from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, selectinload, sessionmaker
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from . import __version__
@@ -22,7 +24,7 @@ from .database import create_database_engine, create_session_factory, initialize
 from .migration_runner import upgrade_database
 from .models import Artifact, ArtifactRevision, Case, ObfuscationRun, RunArtifact, utc_now
 from .services import CaseService, ChatService, ObfuscationService, ResponseService
-from .services.cases import CaseNotFoundError, SqlMismatchError
+from .services.cases import MAX_ARTIFACT_BYTES, CaseNotFoundError, SqlMismatchError
 from .services.chat import (
     NEW_CASE_TITLE,
     AmbiguousInputError,
@@ -37,7 +39,7 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 REQUEST_TOKEN_FIELD = "_token"
 REQUEST_TOKEN_HEADER = "X-Plan-Obfuscator-Token"
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
-MAX_ARTIFACT_BYTES = 20 * 1024 * 1024
+MAX_FORM_PART_BYTES = MAX_ARTIFACT_BYTES
 ARTIFACT_LABELS = {
     "sql": "SQL",
     "xplan": "XPLAN",
@@ -46,6 +48,39 @@ ARTIFACT_LABELS = {
     "predicates": "Predicates",
     "unknown": "Material",
 }
+
+
+class FormTooLargeError(ValueError):
+    pass
+
+
+class LargeFormRoute(APIRoute):
+    def get_route_handler(self) -> Callable[[Request], Coroutine[object, object, Response]]:
+        original_route_handler = super().get_route_handler()
+
+        async def custom_route_handler(request: Request) -> Response:
+            content_type = request.headers.get("content-type", "")
+            if content_type.startswith(
+                ("application/x-www-form-urlencoded", "multipart/form-data")
+            ):
+                file_stack = request.scope.get("fastapi_middleware_astack")
+                try:
+                    form = await request.form(max_part_size=MAX_FORM_PART_BYTES)
+                except StarletteHTTPException as exc:
+                    if (
+                        exc.status_code == 400
+                        and isinstance(exc.detail, str)
+                        and "exceeded maximum size" in exc.detail
+                    ):
+                        raise FormTooLargeError(
+                            "Размер отправленных данных превышает лимит 100 МБ."
+                        ) from exc
+                    raise
+                if isinstance(file_stack, AsyncExitStack):
+                    file_stack.push_async_callback(form.close)
+            return await original_route_handler(request)
+
+        return custom_route_handler
 
 
 class CaseCreatePayload(BaseModel):
@@ -126,13 +161,18 @@ def case_context_changed(case: Case, latest: ObfuscationRun | None) -> bool:
 
 def decode_uploaded_content(content: bytes) -> str:
     if len(content) > MAX_ARTIFACT_BYTES:
-        raise ValueError("Файл превышает лимит 20 МБ")
+        raise ValueError("Файл превышает лимит 100 МБ")
     for encoding in ("utf-8-sig", "utf-16", "cp1251", "latin-1"):
         try:
             return content.decode(encoding)
         except UnicodeDecodeError:
             continue
     raise ValueError("Unsupported text encoding")
+
+
+async def read_uploaded_content(upload: UploadFile) -> str:
+    content = await upload.read(MAX_ARTIFACT_BYTES + 1)
+    return decode_uploaded_content(content)
 
 
 def redirect_to_case(
@@ -166,7 +206,7 @@ async def verify_request_token(request: Request) -> None:
     if supplied is None:
         content_type = request.headers.get("content-type", "")
         if content_type.startswith(("application/x-www-form-urlencoded", "multipart/form-data")):
-            form = await request.form()
+            form = await request.form(max_part_size=MAX_FORM_PART_BYTES)
             value = form.get(REQUEST_TOKEN_FIELD)
             supplied = value if isinstance(value, str) else None
     if not supplied or not secrets.compare_digest(supplied, expected):
@@ -203,6 +243,7 @@ def create_app(
         lifespan=lifespan,
         dependencies=[Depends(verify_request_token)],
     )
+    app.router.route_class = LargeFormRoute
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["127.0.0.1", "localhost"],
@@ -338,6 +379,37 @@ def create_app(
     async def sql_mismatch_handler(_request: Request, error: SqlMismatchError) -> JSONResponse:
         return JSONResponse(status_code=409, content={"detail": str(error)})
 
+    @app.exception_handler(FormTooLargeError)
+    async def form_too_large_handler(request: Request, error: FormTooLargeError) -> Response:
+        if request.url.path.startswith("/api/"):
+            return JSONResponse(status_code=413, content={"detail": str(error)})
+        session = session_factory()
+        try:
+            case_id = request.path_params.get("case_id")
+            if not case_id and "artifact_id" in request.path_params:
+                artifact = session.get(Artifact, request.path_params["artifact_id"])
+                if artifact is not None:
+                    case_id = artifact.case_id
+            if not case_id and "run_id" in request.path_params:
+                run = session.get(ObfuscationRun, request.path_params["run_id"])
+                if run is not None:
+                    case_id = run.case_id
+            if case_id:
+                try:
+                    case = load_case_view(session, str(case_id))
+                    return render_workspace(
+                        request,
+                        session,
+                        case,
+                        error=str(error),
+                        status_code=413,
+                    )
+                except HTTPException:
+                    pass
+            return RedirectResponse(f"/?{urlencode({'error': str(error)})}", status_code=303)
+        finally:
+            session.close()
+
     @app.get("/health", name="health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
@@ -386,7 +458,7 @@ def create_app(
         source = text
         if upload is not None and upload.filename:
             try:
-                source = decode_uploaded_content(await upload.read())
+                source = await read_uploaded_content(upload)
             except ValueError as error:
                 return redirect_to_case(case_id, error=str(error))
             if not display_name:
@@ -416,7 +488,7 @@ def create_app(
         has_file = bool(upload is not None and upload.filename)
         if has_file and upload is not None:
             try:
-                source = decode_uploaded_content(await upload.read())
+                source = await read_uploaded_content(upload)
             except ValueError as error:
                 case = load_case_view(session, case_id)
                 return render_workspace(
@@ -513,6 +585,9 @@ def create_app(
                 mode=ComposerMode.MATERIAL,
                 display_name=display_name,
             )
+        except ValueError as error:
+            CaseService(session).delete_case(case.id)
+            return RedirectResponse(f"/?{urlencode({'error': str(error)})}", status_code=303)
         except Exception:
             CaseService(session).delete_case(case.id)
             raise
@@ -693,6 +768,10 @@ def create_app(
             result = CaseService(session).add_artifact(case_id, payload.text, payload.display_name)
         except CaseNotFoundError:
             raise HTTPException(status_code=404, detail="Case not found") from None
+        except SqlMismatchError:
+            raise
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
         return {
             "id": result.artifact.id,
             "type": result.artifact.detected_type,
@@ -754,6 +833,10 @@ def create_app(
             revision = CaseService(session).revise_artifact(artifact_id, payload.text)
         except LookupError:
             raise HTTPException(status_code=404, detail="Artifact not found") from None
+        except SqlMismatchError:
+            raise
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=str(error)) from None
         return {"id": revision.id, "version": revision.version}
 
     @app.post("/api/cases/{case_id}/runs", status_code=201, name="api_create_run")

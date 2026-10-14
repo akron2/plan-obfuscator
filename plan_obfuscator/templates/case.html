@@ -115,7 +115,7 @@
                     <span class="disclosure-icon" aria-hidden="true">⌄</span>
                   </summary>
                   <div class="artifact-editor">
-                    <form method="post" action="/artifacts/{{ artifact.id }}/revisions"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+                    <form method="post" action="/artifacts/{{ artifact.id }}/revisions" enctype="multipart/form-data"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
                       <textarea name="text" rows="12" spellcheck="false">{{ current.source_text }}</textarea>
                       <div class="artifact-actions">
                         <span>{{ artifact.revisions|length }} ревизий</span>
@@ -174,10 +174,9 @@
                 <button type="button" class="copy-primary" data-copy-target="prompt-copy-{{ run.id }}" data-prompt-copied>Копировать prompt</button>
                 <details class="inline-details">
                   <summary>Развернуть</summary>
-                  <pre class="code-block">{{ run.prompt_text }}</pre>
+                  <pre id="prompt-copy-{{ run.id }}" class="code-block">{{ run.prompt_text }}</pre>
                 </details>
               </div>
-              <textarea id="prompt-copy-{{ run.id }}" class="visually-hidden" aria-hidden="true" tabindex="-1">{{ run.prompt_text }}</textarea>
             </div>
           </article>
 
@@ -231,14 +230,13 @@
       </div>
       {% endif %}
       {% if offer_new_case %}
-      <form method="post" action="/cases/from-material" class="new-case-offer"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
+      <form method="post" action="/cases/from-material" enctype="multipart/form-data" class="new-case-offer"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
         <textarea name="text" hidden>{{ composer_draft }}</textarea>
         <span>Этот SQL относится к другому кейсу.</span>
         <button type="submit">Создать отдельный кейс</button>
       </form>
       {% endif %}
       <form method="post" action="/cases/{{ case.id }}/messages" enctype="multipart/form-data" class="composer" data-composer data-case-prefix="{{ case.token_prefix }}"><input type="hidden" name="{{ request_token_field }}" value="{{ request_token }}">
-        <textarea name="pasted_plain" data-pasted-plain hidden>{{ pasted_plain }}</textarea>
         <textarea name="pasted_html" data-pasted-html hidden>{{ pasted_html }}</textarea>
         <div class="composer-toolbar">
           <label class="attach-button" title="Добавить файл">

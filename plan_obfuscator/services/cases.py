@@ -11,6 +11,15 @@ from ..parsing import ArtifactKind, detect_artifact_kind, parse_artifact
 from ..parsing.utils import sql_fingerprint, sql_is_compatible
 from .tokens import generate_case_prefix
 
+MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
+
+
+def _ensure_artifact_size(text: str) -> None:
+    if len(text) > MAX_ARTIFACT_BYTES or (
+        len(text) * 4 > MAX_ARTIFACT_BYTES and len(text.encode("utf-8")) > MAX_ARTIFACT_BYTES
+    ):
+        raise ValueError("Материал превышает лимит 100 МБ")
+
 
 class CaseNotFoundError(LookupError):
     pass
@@ -114,6 +123,7 @@ class CaseService:
         case = self.get_case(case_id)
         if not text.strip():
             raise ValueError("Artifact text is empty")
+        _ensure_artifact_size(text)
         kind = detect_artifact_kind(text)
         details = self._validate_sql(case, text, kind)
         default_name = {
@@ -158,6 +168,7 @@ class CaseService:
         for text, display_name in materials:
             if not text.strip():
                 raise ValueError("Artifact text is empty")
+            _ensure_artifact_size(text)
             kind = detect_artifact_kind(text)
             details = self._validate_sql(case, text, kind)
             default_name = {
@@ -203,6 +214,7 @@ class CaseService:
             raise LookupError(artifact_id)
         if not text.strip():
             raise ValueError("Artifact text is empty")
+        _ensure_artifact_size(text)
         kind = ArtifactKind(artifact.detected_type)
         detected = detect_artifact_kind(text)
         if detected != kind and detected != ArtifactKind.UNKNOWN:

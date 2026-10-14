@@ -403,3 +403,69 @@ def test_context_changed_is_visible_after_new_material(client, fixture_text) -> 
     page = client.get(f"/cases/{case_id}")
     assert "Контекст изменился" in page.text
     assert "Предыдущий цикл сохранён" in page.text
+    assert '<pre id="prompt-copy-' in page.text
+    assert '<textarea id="prompt-copy-' not in page.text
+    assert "data-pasted-plain" not in page.text
+
+
+def test_large_plan_over_1mb_succeeds_in_multipart_and_revision_forms(
+    client,
+    fixture_text,
+) -> None:
+    case_id = client.post("/api/cases", json={"title": "Large plan"}).json()["id"]
+    base_plan = fixture_text("xplan_19c.txt")
+    # Build a valid plan payload larger than Starlette's default 1024 KB form part limit.
+    padding_line = (
+        "|*  2 |   TABLE ACCESS FULL          | ORDER_ITEMS |   100 |  4000 |     5   (0)| "
+        "00:00:01 |\n"
+    )
+    large_plan = base_plan + "\n" + (padding_line * 15000)
+    assert len(large_plan.encode("utf-8")) > 1024 * 1024
+
+    # Simulate multipart/form-data submission from the browser composer form.
+    submitted = client.post(
+        f"/cases/{case_id}/messages",
+        data={
+            "text": large_plan,
+            "mode": "auto",
+            "display_name": "",
+            "pasted_html": "",
+        },
+        files={"upload": ("", b"", "text/plain")},
+        follow_redirects=False,
+    )
+    assert submitted.status_code == 303, submitted.text
+
+    detail = client.get(f"/api/cases/{case_id}").json()
+    assert len(detail["artifacts"]) == 1
+    artifact_id = detail["artifacts"][0]["id"]
+
+    # Revise the >1 MB artifact via the revision form.
+    revised = client.post(
+        f"/artifacts/{artifact_id}/revisions",
+        data={"text": large_plan + padding_line},
+        follow_redirects=False,
+    )
+    assert revised.status_code == 303, revised.text
+    detail_after = client.get(f"/api/cases/{case_id}").json()
+    assert detail_after["artifacts"][0]["revision_count"] == 2
+
+
+def test_form_exceeding_max_part_size_renders_workspace_error_instead_of_raw_json(
+    client,
+    monkeypatch,
+) -> None:
+    import plan_obfuscator.web as web_module
+
+    case_id = client.post("/api/cases", json={"title": "Limit test"}).json()["id"]
+    monkeypatch.setattr(web_module, "MAX_FORM_PART_BYTES", 2048)
+
+    oversized = client.post(
+        f"/cases/{case_id}/messages",
+        data={"text": "select " + ("a, " * 1000) + "1 from dual", "mode": "auto"},
+        files={"upload": ("", b"", "text/plain")},
+    )
+
+    assert oversized.status_code == 413
+    assert "Размер отправленных данных превышает лимит 100 МБ." in oversized.text
+    assert "Part exceeded maximum size" not in oversized.text
