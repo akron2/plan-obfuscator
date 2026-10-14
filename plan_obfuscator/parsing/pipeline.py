@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import re
+import threading
+from collections import OrderedDict
+from concurrent.futures import Future
 from dataclasses import dataclass
 
 from .detector import detect_artifact_kind
@@ -9,6 +13,27 @@ from .sql import parse_expression_fragment, parse_hint_fragment, parse_sql
 from .types import ArtifactKind, EntityType, ParsedArtifact, ParseFinding, TextOccurrence
 from .utils import make_occurrence
 from .xplan import extract_xplan_sql, parse_xplan
+
+MAX_PARSED_ARTIFACT_CACHE = 32
+_PARSE_CACHE: OrderedDict[tuple[str, int, bytes], ParsedArtifact] = OrderedDict()
+_INFLIGHT_PARSES: dict[tuple[str, int, bytes], Future[ParsedArtifact]] = {}
+_PARSE_CACHE_LOCK = threading.Lock()
+
+
+def _clone_parsed_artifact(parsed: ParsedArtifact) -> ParsedArtifact:
+    return ParsedArtifact(
+        kind=parsed.kind,
+        source_text=parsed.source_text,
+        occurrences=list(parsed.occurrences),
+        findings=list(parsed.findings),
+        extracted_sql=list(parsed.extracted_sql),
+        metadata=dict(parsed.metadata),
+    )
+
+
+def _parse_cache_key(text: str, resolved: ArtifactKind) -> tuple[str, int, bytes]:
+    digest = hashlib.blake2b(text.encode("utf-8", errors="ignore"), digest_size=16).digest()
+    return (resolved.value, len(text), digest)
 
 
 def _parse_outline(text: str) -> ParsedArtifact:
@@ -77,8 +102,7 @@ def extract_artifact_sql(text: str, kind: ArtifactKind | str | None = None) -> l
     return []
 
 
-def parse_artifact(text: str, kind: ArtifactKind | str | None = None) -> ParsedArtifact:
-    resolved = ArtifactKind(kind) if kind else detect_artifact_kind(text)
+def _parse_artifact_uncached(text: str, resolved: ArtifactKind) -> ParsedArtifact:
     if resolved == ArtifactKind.SQL:
         return parse_sql(text)
     if resolved == ArtifactKind.XPLAN:
@@ -90,6 +114,57 @@ def parse_artifact(text: str, kind: ArtifactKind | str | None = None) -> ParsedA
     if resolved == ArtifactKind.PREDICATES:
         return _parse_predicates(text)
     return _parse_unknown(text)
+
+
+def parse_artifact(text: str, kind: ArtifactKind | str | None = None) -> ParsedArtifact:
+    resolved = ArtifactKind(kind) if kind else detect_artifact_kind(text)
+    key = _parse_cache_key(text, resolved)
+    with _PARSE_CACHE_LOCK:
+        cached = _PARSE_CACHE.get(key)
+        if cached is not None:
+            _PARSE_CACHE.move_to_end(key)
+            return _clone_parsed_artifact(cached)
+        inflight = _INFLIGHT_PARSES.get(key)
+        if inflight is None:
+            inflight = Future()
+            _INFLIGHT_PARSES[key] = inflight
+            is_owner = True
+        else:
+            is_owner = False
+
+    if not is_owner:
+        return _clone_parsed_artifact(inflight.result())
+
+    try:
+        parsed = _parse_artifact_uncached(text, resolved)
+    except BaseException as exc:
+        with _PARSE_CACHE_LOCK:
+            _INFLIGHT_PARSES.pop(key, None)
+        inflight.set_exception(exc)
+        raise
+
+    with _PARSE_CACHE_LOCK:
+        _INFLIGHT_PARSES.pop(key, None)
+        _PARSE_CACHE[key] = parsed
+        _PARSE_CACHE.move_to_end(key)
+        while len(_PARSE_CACHE) > MAX_PARSED_ARTIFACT_CACHE:
+            _PARSE_CACHE.popitem(last=False)
+    inflight.set_result(parsed)
+    return _clone_parsed_artifact(parsed)
+
+
+def warm_parsed_artifact_cache(text: str, kind: ArtifactKind | str | None = None) -> None:
+    if len(text) < 4096:
+        return
+    resolved = ArtifactKind(kind) if kind else detect_artifact_kind(text)
+    key = _parse_cache_key(text, resolved)
+    with _PARSE_CACHE_LOCK:
+        if key in _PARSE_CACHE or key in _INFLIGHT_PARSES:
+            return
+    timer = threading.Timer(0.05, parse_artifact, args=(text, resolved))
+    timer.daemon = True
+    timer.name = "plan-obfuscator-parse-warm"
+    timer.start()
 
 
 def _shift_occurrence(item: TextOccurrence, offset: int, source: str) -> TextOccurrence:

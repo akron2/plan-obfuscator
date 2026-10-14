@@ -8,13 +8,14 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.routing import APIRoute
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 from sqlalchemy import Engine, select
-from sqlalchemy.orm import Session, selectinload, sessionmaker
+from sqlalchemy.orm import Session, defer, selectinload, sessionmaker
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
@@ -22,7 +23,7 @@ from . import __version__
 from .config import Settings
 from .database import create_database_engine, create_session_factory, initialize_schema
 from .migration_runner import upgrade_database
-from .models import Artifact, ArtifactRevision, Case, ObfuscationRun, RunArtifact, utc_now
+from .models import Artifact, ArtifactRevision, Case, ObfuscationRun, RunArtifact, Symbol, utc_now
 from .services import CaseService, ChatService, ObfuscationService, ResponseService
 from .services.cases import MAX_ARTIFACT_BYTES, CaseNotFoundError, SqlMismatchError
 from .services.chat import (
@@ -244,6 +245,7 @@ def create_app(
         dependencies=[Depends(verify_request_token)],
     )
     app.router.route_class = LargeFormRoute
+    app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=1)
     app.add_middleware(
         TrustedHostMiddleware,
         allowed_hosts=["127.0.0.1", "localhost"],
@@ -284,8 +286,9 @@ def create_app(
             .execution_options(populate_existing=True)
             .options(
                 selectinload(Case.artifacts).selectinload(Artifact.revisions),
-                selectinload(Case.symbols),
-                selectinload(Case.runs).selectinload(ObfuscationRun.run_artifacts),
+                selectinload(Case.runs)
+                .selectinload(ObfuscationRun.run_artifacts)
+                .options(defer(RunArtifact.obfuscated_text)),
                 selectinload(Case.runs).selectinload(ObfuscationRun.responses),
                 selectinload(Case.runs).selectinload(ObfuscationRun.findings),
             )
@@ -329,8 +332,14 @@ def create_app(
         awaiting_response = bool(latest is not None and not latest.responses)
         rendered_responses: dict[str, RenderedAnswer] = {}
         replacements: dict[str, str] = {}
-        if case is not None:
-            replacements = {symbol.marker: symbol.preferred_original for symbol in case.symbols}
+        if case is not None and any(run.responses for run in case.runs):
+            replacements = dict(
+                session.execute(
+                    select(Symbol.marker, Symbol.preferred_original).where(
+                        Symbol.case_id == case.id
+                    )
+                ).all()
+            )
             for run in case.runs:
                 for response in run.responses:
                     rendered_responses[response.id] = render_answer_markdown(

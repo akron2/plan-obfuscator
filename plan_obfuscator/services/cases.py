@@ -4,10 +4,15 @@ import re
 from dataclasses import dataclass
 
 from sqlalchemy import delete, select
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, defer, selectinload
 
-from ..models import Artifact, ArtifactRevision, Case, ObfuscationRun, utc_now
-from ..parsing import ArtifactKind, detect_artifact_kind, extract_artifact_sql
+from ..models import Artifact, ArtifactRevision, Case, ObfuscationRun, Response, utc_now
+from ..parsing import (
+    ArtifactKind,
+    detect_artifact_kind,
+    extract_artifact_sql,
+    warm_parsed_artifact_cache,
+)
 from ..parsing.utils import sql_fingerprint, sql_is_compatible
 from .tokens import generate_case_prefix
 
@@ -58,7 +63,10 @@ class CaseService:
                 select(Case)
                 .options(
                     selectinload(Case.artifacts),
-                    selectinload(Case.runs).selectinload(ObfuscationRun.responses),
+                    selectinload(Case.runs)
+                    .options(defer(ObfuscationRun.prompt_text))
+                    .selectinload(ObfuscationRun.responses)
+                    .options(defer(Response.raw_text), defer(Response.restored_text)),
                 )
                 .order_by(Case.updated_at.desc())
             )
@@ -70,9 +78,8 @@ class CaseService:
             .where(Case.id == case_id)
             .execution_options(populate_existing=True)
             .options(
-                selectinload(Case.artifacts).selectinload(Artifact.revisions),
-                selectinload(Case.symbols),
-                selectinload(Case.runs),
+                selectinload(Case.artifacts),
+                selectinload(Case.runs).options(defer(ObfuscationRun.prompt_text)),
             )
         )
         if case is None:
@@ -156,6 +163,7 @@ class CaseService:
         self.session.commit()
         self.session.refresh(artifact)
         self.session.refresh(revision)
+        warm_parsed_artifact_cache(text, resolved_kind)
         return ArtifactResult(artifact=artifact, revision=revision)
 
     def add_artifacts(
@@ -167,6 +175,7 @@ class CaseService:
             raise ValueError("No materials were provided")
         case = self.get_case(case_id)
         results: list[ArtifactResult] = []
+        warm_targets: list[tuple[str, ArtifactKind]] = []
         for item in materials:
             if len(item) == 3:
                 text, display_name, pre_kind = item
@@ -203,11 +212,14 @@ class CaseService:
             self.session.flush()
             artifact.current_revision_id = revision.id
             results.append(ArtifactResult(artifact=artifact, revision=revision))
+            warm_targets.append((text, kind))
         case.updated_at = utc_now()
         self.session.commit()
         for result in results:
             self.session.refresh(result.artifact)
             self.session.refresh(result.revision)
+        for text, kind in warm_targets:
+            warm_parsed_artifact_cache(text, kind)
         return tuple(results)
 
     def revise_artifact(self, artifact_id: str, text: str) -> ArtifactRevision:
@@ -241,6 +253,7 @@ class CaseService:
         artifact.case.updated_at = utc_now()
         self.session.commit()
         self.session.refresh(revision)
+        warm_parsed_artifact_cache(text, kind)
         return revision
 
     def delete_case(self, case_id: str) -> None:

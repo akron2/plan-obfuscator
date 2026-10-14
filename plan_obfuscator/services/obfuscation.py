@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+import uuid
 from dataclasses import dataclass
 
-from sqlalchemy import insert, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import (
@@ -23,7 +24,7 @@ from ..parsing.types import ParseFinding
 from ..parsing.utils import canonical_value
 from .cases import CaseNotFoundError
 from .prompt import PromptArtifact, build_prompt
-from .tokens import TOKEN_SCHEME_VERSION, SymbolRegistry
+from .tokens import TOKEN_SCHEME_VERSION, SymbolEntry, SymbolRegistry
 
 PARSER_VERSION = "1"
 TYPE_ORDER = {
@@ -83,7 +84,7 @@ WORD_TOKEN_RE = re.compile(r"[A-Za-z0-9_$#]+")
 @dataclass(slots=True, frozen=True)
 class AppliedReplacement:
     occurrence: TextOccurrence
-    symbol: Symbol
+    symbol: Symbol | SymbolEntry
     output_start: int
     output_end: int
 
@@ -96,7 +97,7 @@ class ObfuscatedText:
 
 def apply_replacements(
     source: str,
-    replacements: list[tuple[TextOccurrence, Symbol]],
+    replacements: list[tuple[TextOccurrence, Symbol | SymbolEntry]],
 ) -> ObfuscatedText:
     ordered = sorted(replacements, key=lambda pair: pair[0].start)
     parts: list[str] = []
@@ -179,7 +180,8 @@ def _post_transform_findings(
     obfuscated: ObfuscatedText,
 ) -> list[ParseFinding]:
     findings: list[ParseFinding] = []
-    if re.search(rf"(?i)\bOBF_{re.escape(case.token_prefix)}_", source):
+    marker_prefix = f"OBF_{case.token_prefix}_"
+    if re.search(rf"(?i)\b{re.escape(marker_prefix)}", source):
         findings.append(
             ParseFinding(
                 severity="warning",
@@ -190,6 +192,7 @@ def _post_transform_findings(
 
     word_positions: dict[str, tuple[int, int]] | None = None
     seen: set[tuple[str, str]] = set()
+    marker_prefix_upper = marker_prefix.upper()
     for replacement in obfuscated.replacements:
         symbol = replacement.symbol
         original = symbol.preferred_original
@@ -204,7 +207,12 @@ def _post_transform_findings(
             if word_positions is None:
                 word_positions = {}
                 for word_match in WORD_TOKEN_RE.finditer(obfuscated.text):
-                    token_upper = word_match.group(0).upper()
+                    token = word_match.group(0)
+                    if len(token) < 3:
+                        continue
+                    token_upper = token.upper()
+                    if token_upper.startswith(marker_prefix_upper):
+                        continue
                     if token_upper not in word_positions:
                         word_positions[token_upper] = (word_match.start(), word_match.end())
             span = word_positions.get(upper)
@@ -242,7 +250,6 @@ class ObfuscationService:
             .execution_options(populate_existing=True)
             .options(
                 selectinload(Case.artifacts).selectinload(Artifact.revisions),
-                selectinload(Case.symbols),
             )
         )
         if case is None:
@@ -287,6 +294,8 @@ class ObfuscationService:
             parsed.findings.extend(_post_transform_findings(case, revision.source_text, obfuscated))
             transformed.append((artifact, revision, parsed, obfuscated))
 
+        registry.persist()
+
         prompt = build_prompt(
             [
                 PromptArtifact(
@@ -316,7 +325,9 @@ class ObfuscationService:
         case.updated_at = utc_now()
         self.session.flush()
 
-        replacement_rows: list[dict[str, object]] = []
+        repl_id_prefix = f"{uuid.uuid4().hex[:24]}-"
+        repl_seq = 0
+        replacement_tuples: list[tuple[object, ...]] = []
         for position, (artifact, revision, parsed, obfuscated) in enumerate(transformed):
             run_artifact = RunArtifact(
                 id=new_uuid(),
@@ -328,20 +339,22 @@ class ObfuscationService:
                 obfuscated_text=obfuscated.text,
             )
             self.session.add(run_artifact)
+            run_artifact_id = run_artifact.id
             for item in obfuscated.replacements:
-                replacement_rows.append(
-                    {
-                        "id": new_uuid(),
-                        "run_artifact_id": run_artifact.id,
-                        "symbol_id": item.symbol.id,
-                        "source_start": item.occurrence.start,
-                        "source_end": item.occurrence.end,
-                        "output_start": item.output_start,
-                        "output_end": item.output_end,
-                        "original_lexeme": item.occurrence.original,
-                        "marker": item.symbol.marker,
-                        "quoting_context": item.occurrence.quoting_context,
-                    }
+                repl_seq += 1
+                replacement_tuples.append(
+                    (
+                        f"{repl_id_prefix}{repl_seq:08x}",
+                        run_artifact_id,
+                        item.symbol.id,
+                        item.occurrence.start,
+                        item.occurrence.end,
+                        item.output_start,
+                        item.output_end,
+                        item.occurrence.original,
+                        item.symbol.marker,
+                        item.occurrence.quoting_context,
+                    )
                 )
             for parse_finding in parsed.findings:
                 self.session.add(
@@ -357,15 +370,25 @@ class ObfuscationService:
                 )
 
         self.session.flush()
-        if replacement_rows:
-            self.session.execute(insert(ReplacementOccurrence), replacement_rows)
+        if replacement_tuples:
+            raw_conn = self.session.connection().connection.dbapi_connection
+            if raw_conn is not None:
+                raw_conn.cursor().executemany(
+                    "INSERT INTO replacement_occurrences ("
+                    "id, run_artifact_id, symbol_id, source_start, source_end, "
+                    "output_start, output_end, original_lexeme, marker, quoting_context"
+                    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    replacement_tuples,
+                )
         self.session.commit()
         return self.get_run(run.id, include_replacements=False)
 
     def get_run(self, run_id: str, *, include_replacements: bool = True) -> ObfuscationRun:
         run_artifacts_loader = selectinload(ObfuscationRun.run_artifacts)
+        case_loader = selectinload(ObfuscationRun.case)
         if include_replacements:
             run_artifacts_loader = run_artifacts_loader.selectinload(RunArtifact.replacements)
+            case_loader = case_loader.selectinload(Case.symbols)
         run = self.session.scalar(
             select(ObfuscationRun)
             .where(ObfuscationRun.id == run_id)
@@ -373,7 +396,7 @@ class ObfuscationService:
                 run_artifacts_loader,
                 selectinload(ObfuscationRun.responses),
                 selectinload(ObfuscationRun.findings),
-                selectinload(ObfuscationRun.case).selectinload(Case.symbols),
+                case_loader,
             )
         )
         if run is None:
@@ -381,30 +404,31 @@ class ObfuscationService:
         return run
 
     def restore_run_artifact(self, run_artifact_id: str) -> str:
-        run_artifact = self.session.scalar(
-            select(RunArtifact)
-            .where(RunArtifact.id == run_artifact_id)
-            .options(
-                selectinload(RunArtifact.replacements).selectinload(ReplacementOccurrence.symbol),
-                selectinload(RunArtifact.revision),
-            )
+        obfuscated = self.session.scalar(
+            select(RunArtifact.obfuscated_text).where(RunArtifact.id == run_artifact_id)
         )
-        if run_artifact is None:
+        if obfuscated is None:
             raise LookupError(run_artifact_id)
-        obfuscated = run_artifact.obfuscated_text
-        ordered = sorted(
-            run_artifact.replacements,
-            key=lambda replacement: replacement.output_start,
-        )
+        rows = self.session.execute(
+            select(
+                ReplacementOccurrence.output_start,
+                ReplacementOccurrence.output_end,
+                ReplacementOccurrence.marker,
+                ReplacementOccurrence.original_lexeme,
+            )
+            .where(ReplacementOccurrence.run_artifact_id == run_artifact_id)
+            .order_by(ReplacementOccurrence.output_start)
+        ).all()
         parts: list[str] = []
         cursor = 0
-        for item in ordered:
-            if item.output_start < cursor:
+        for output_start, output_end, marker, original_lexeme in rows:
+            if output_start < cursor:
                 raise ValueError("Stored obfuscated text does not match its manifest")
-            if obfuscated[item.output_start : item.output_end].upper() != item.marker.upper():
+            if obfuscated[output_start:output_end].upper() != marker.upper():
                 raise ValueError("Stored obfuscated text does not match its manifest")
-            parts.append(obfuscated[cursor : item.output_start])
-            parts.append(item.original_lexeme)
-            cursor = item.output_end
+            parts.append(obfuscated[cursor:output_start])
+            parts.append(original_lexeme)
+            cursor = output_end
         parts.append(obfuscated[cursor:])
         return "".join(parts)
+

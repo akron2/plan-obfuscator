@@ -6,7 +6,7 @@ from collections.abc import Iterable
 import sqlglot
 from sqlglot import Dialect, exp
 from sqlglot.errors import ParseError
-from sqlglot.tokens import Token, TokenType
+from sqlglot.tokens import TokenType
 
 from .types import ArtifactKind, EntityType, ParsedArtifact, ParseFinding, TextOccurrence
 from .utils import canonical_value, make_occurrence
@@ -763,6 +763,28 @@ def parse_hint_fragment(text: str, *, base_offset: int = 0) -> list[TextOccurren
     return shifted
 
 
+ORACLE_NON_VAR_KEYWORDS = (
+    {keyword for keyword in ORACLE_DIALECT.Tokenizer.KEYWORDS if " " not in keyword}
+    | KNOWN_FUNCTIONS
+    | {"ACCESS", "FILTER"}
+)
+
+EXPR_TOKEN_RE = re.compile(
+    r"""(?x)
+    (?P<comment>/\*[\s\S]*?\*/|--[^\r\n]*)
+    | (?P<ident>"(?:""|[^"])*")
+    | (?P<nstring>[nN]'(?:''|[^'])*')
+    | (?P<string>'(?:''|[^'])*')
+    | (?P<bind>:[A-Za-z_$#][A-Za-z0-9_$#]*)
+    | (?P<numbind>:\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?)
+    | (?P<qblock>(?:SEL|SET|INS|UPD|DEL)\$[A-Za-z0-9_]+)
+    | (?P<func>[A-Za-z_$#][A-Za-z0-9_$#]*)(?=\s*\()
+    | (?P<number>(?<![A-Za-z0-9_$#])\d+(?:\.\d+)?(?:[Ee][+-]?\d+)?(?![A-Za-z0-9_$#]))
+    """,
+    re.IGNORECASE,
+)
+
+
 def parse_expression_fragment(
     text: str,
     *,
@@ -773,90 +795,86 @@ def parse_expression_fragment(
     """Conservative tokenizer for XPLAN predicates and projection fragments."""
 
     result: list[TextOccurrence] = []
-    try:
-        tokens: list[Token] = ORACLE_DIALECT.tokenize(text)
-    except Exception:
-        tokens = []
+    text_len = len(text)
+    unclosed_comment = "/*" in text and text.count("/*") > text.count("*/")
 
-    for index, token in enumerate(tokens):
-        start = token.start
-        end = token.end + 1
-        previous = tokens[index - 1] if index else None
-        following = tokens[index + 1] if index + 1 < len(tokens) else None
-        occurrence: TextOccurrence | None = None
+    if not unclosed_comment:
+        for match in EXPR_TOKEN_RE.finditer(text):
+            kind = match.lastgroup
+            if kind == "comment":
+                continue
+            start, end = match.start(), match.end()
+            occurrence: TextOccurrence | None = None
 
-        if token.token_type == TokenType.IDENTIFIER:
-            raw_start = start + 1
-            raw_end = end - 1
-            previous_char = text[start - 1] if start else ""
-            following_char = text[end] if end < len(text) else ""
-            if previous_char == "@":
-                entity_type = EntityType.QUERY_BLOCK
-            elif following_char == "@":
-                entity_type = EntityType.ALIAS
-            elif following and following.token_type == TokenType.DOT:
-                entity_type = EntityType.ALIAS
-            else:
-                entity_type = EntityType.COLUMN
-            semantic_quoted = (
-                token.text != token.text.upper()
-                or not UNQUOTED_UPPER_IDENT_RE.fullmatch(token.text)
-            )
-            occurrence = make_occurrence(
-                text,
-                raw_start,
-                raw_end,
-                entity_type,
-                "oracle_expression",
-                canonical=canonical_value(entity_type, token.text, quoted=semantic_quoted),
-                quoted=semantic_quoted,
-                quoting_context="quoted_identifier",
-            )
-        elif token.token_type in {TokenType.STRING, TokenType.NATIONAL_STRING} and mask_strings:
-            segment = text[start:end]
-            raw_start, raw_end = start, end
-            if segment.startswith("'") and segment.endswith("'"):
-                raw_start += 1
-                raw_end -= 1
-            elif len(segment) >= 3 and segment[0].upper() == "N" and segment[1] == "'":
-                raw_start += 2
-                raw_end -= 1
-            occurrence = make_occurrence(
-                text,
-                raw_start,
-                raw_end,
-                EntityType.STRING_LITERAL,
-                "oracle_expression",
-                canonical=canonical_value(EntityType.STRING_LITERAL, token.text),
-                quoting_context="string",
-            )
-        elif token.token_type == TokenType.NUMBER and mask_numbers:
-            if previous and previous.token_type == TokenType.COLON:
-                entity_type = EntityType.BIND
-                quoting_context = "bind"
-            else:
-                entity_type = EntityType.NUMBER_LITERAL
-                quoting_context = "none"
-            occurrence = make_occurrence(
-                text,
-                start,
-                end,
-                entity_type,
-                "oracle_expression",
-                quoting_context=quoting_context,
-            )
-        elif token.token_type == TokenType.VAR:
-            upper = token.text.upper()
-            if previous and previous.token_type == TokenType.COLON:
+            if kind == "ident":
+                raw_start = start + 1
+                raw_end = end - 1
+                previous_char = text[start - 1] if start else ""
+                following_char = text[end] if end < text_len else ""
+                if previous_char == "@":
+                    entity_type = EntityType.QUERY_BLOCK
+                elif following_char == "@":
+                    entity_type = EntityType.ALIAS
+                else:
+                    cursor = end
+                    while cursor < text_len and text[cursor] in " \t\r\n":
+                        cursor += 1
+                    entity_type = (
+                        EntityType.ALIAS
+                        if cursor < text_len and text[cursor] == "."
+                        else EntityType.COLUMN
+                    )
+                token_text = text[raw_start:raw_end].replace('""', '"')
+                semantic_quoted = (
+                    token_text != token_text.upper()
+                    or not UNQUOTED_UPPER_IDENT_RE.fullmatch(token_text)
+                )
                 occurrence = make_occurrence(
                     text,
-                    start,
+                    raw_start,
+                    raw_end,
+                    entity_type,
+                    "oracle_expression",
+                    canonical=canonical_value(entity_type, token_text, quoted=semantic_quoted),
+                    quoted=semantic_quoted,
+                    quoting_context="quoted_identifier",
+                )
+            elif kind in {"string", "nstring"}:
+                if not mask_strings:
+                    continue
+                raw_start = start + (2 if kind == "nstring" else 1)
+                raw_end = end - 1
+                token_text = text[raw_start:raw_end].replace("''", "'")
+                occurrence = make_occurrence(
+                    text,
+                    raw_start,
+                    raw_end,
+                    EntityType.STRING_LITERAL,
+                    "oracle_expression",
+                    canonical=canonical_value(EntityType.STRING_LITERAL, token_text),
+                    quoting_context="string",
+                )
+            elif kind == "bind":
+                occurrence = make_occurrence(
+                    text,
+                    start + 1,
                     end,
                     EntityType.BIND,
                     "oracle_expression",
                     quoting_context="bind",
                 )
-            elif QUERY_BLOCK_RE.fullmatch(upper):
+            elif kind == "numbind":
+                if not mask_numbers:
+                    continue
+                occurrence = make_occurrence(
+                    text,
+                    start + 1,
+                    end,
+                    EntityType.BIND,
+                    "oracle_expression",
+                    quoting_context="bind",
+                )
+            elif kind == "qblock":
                 occurrence = make_occurrence(
                     text,
                     start,
@@ -864,33 +882,43 @@ def parse_expression_fragment(
                     EntityType.QUERY_BLOCK,
                     "oracle_expression",
                 )
-            elif following and following.token_type == TokenType.L_PAREN:
-                # Oracle and user functions are useful structural information. Built-ins
-                # remain visible; user-defined names are masked.
-                if upper not in KNOWN_FUNCTIONS and upper not in {"ACCESS", "FILTER"}:
-                    occurrence = make_occurrence(
-                        text,
-                        start,
-                        end,
-                        EntityType.FUNCTION,
-                        "oracle_expression",
-                        confidence=0.8,
-                    )
-
-        if occurrence:
-            result.append(
-                TextOccurrence(
-                    start=occurrence.start + base_offset,
-                    end=occurrence.end + base_offset,
-                    entity_type=occurrence.entity_type,
-                    original=occurrence.original,
-                    canonical=occurrence.canonical,
-                    provenance=occurrence.provenance,
-                    confidence=occurrence.confidence,
-                    quoting_context=occurrence.quoting_context,
-                    priority=occurrence.priority,
+            elif kind == "func":
+                if text[start:end].upper() in ORACLE_NON_VAR_KEYWORDS:
+                    continue
+                occurrence = make_occurrence(
+                    text,
+                    start,
+                    end,
+                    EntityType.FUNCTION,
+                    "oracle_expression",
+                    confidence=0.8,
                 )
-            )
+            elif kind == "number":
+                if not mask_numbers:
+                    continue
+                occurrence = make_occurrence(
+                    text,
+                    start,
+                    end,
+                    EntityType.NUMBER_LITERAL,
+                    "oracle_expression",
+                    quoting_context="none",
+                )
+
+            if occurrence:
+                if base_offset:
+                    occurrence = TextOccurrence(
+                        start=occurrence.start + base_offset,
+                        end=occurrence.end + base_offset,
+                        entity_type=occurrence.entity_type,
+                        original=occurrence.original,
+                        canonical=occurrence.canonical,
+                        provenance=occurrence.provenance,
+                        confidence=occurrence.confidence,
+                        quoting_context=occurrence.quoting_context,
+                        priority=occurrence.priority,
+                    )
+                result.append(occurrence)
 
     fallback_occurrences: list[TextOccurrence] = []
     if text.count("'") % 2:
@@ -919,7 +947,7 @@ def parse_expression_fragment(
         )
         if occurrence:
             fallback_occurrences.append(occurrence)
-    if not tokens and text.strip():
+    if unclosed_comment and text.strip():
         occurrence = make_occurrence(
             text,
             len(text) - len(text.lstrip()),

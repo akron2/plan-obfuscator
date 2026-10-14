@@ -178,3 +178,29 @@ def test_large_500k_xplan_upload_obfuscate_and_restore_performance(db_session) -
     restored = ObfuscationService(db_session).restore_run_artifact(run_artifact.id)
     assert restored == plan_text
 
+    # Add a second 500 KB plan with unique predicate expressions and ask a 1-sentence question.
+    preds_2 = "".join(
+        pred_tpl.format(i, i, (i + 7) % 1900, i, (i + 13) % 1900) for i in range(1, 2400)
+    )
+    plan_text_2 = (header + rows + pred_header + preds_2).strip()
+    assert len(plan_text_2) >= 500_000
+
+    upload_2 = chat.submit(case.id, plan_text_2)
+    assert upload_2.kind == SubmissionKind.MATERIAL
+
+    t2 = time.perf_counter()
+    question_2 = chat.submit(case.id, "Сравни оба плана в одном предложении.")
+    question_2_seconds = time.perf_counter() - t2
+    assert question_2.kind == SubmissionKind.QUESTION
+    assert question_2.run is not None
+    assert len(question_2.run.run_artifacts) == 2
+    assert question_2_seconds < 4.0
+
+    t3 = time.perf_counter()
+    question_3 = chat.submit(case.id, "А что по предикатам во втором плане?")
+    question_3_seconds = time.perf_counter() - t3
+    assert question_3.kind == SubmissionKind.QUESTION
+    assert question_3.run is not None
+    assert question_3_seconds < 4.0
+
+

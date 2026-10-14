@@ -116,6 +116,10 @@ setHistoryMode(localStorage.getItem(HISTORY_KEY) || "latest");
 function autoGrow() {
   if (!composerInput) return;
   const value = composerInput.value || "";
+  if (!value || (value.length < 100 && !value.includes("\n"))) {
+    composerInput.style.height = "36px";
+    return;
+  }
   if (value.length > 4096 || hasAtLeastLines(value.slice(0, 4096), 12)) {
     composerInput.style.height = "240px";
     return;

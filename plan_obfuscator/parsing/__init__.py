@@ -5,6 +5,7 @@ from .pipeline import (
     parse_artifact,
     parse_prompt,
     split_materials,
+    warm_parsed_artifact_cache,
 )
 from .types import ArtifactKind, EntityType, ParsedArtifact, ParseFinding, TextOccurrence
 
@@ -20,4 +21,5 @@ __all__ = [
     "parse_artifact",
     "parse_prompt",
     "split_materials",
+    "warm_parsed_artifact_cache",
 ]
