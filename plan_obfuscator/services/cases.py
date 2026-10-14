@@ -7,7 +7,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import Artifact, ArtifactRevision, Case, ObfuscationRun, utc_now
-from ..parsing import ArtifactKind, detect_artifact_kind, parse_artifact
+from ..parsing import ArtifactKind, detect_artifact_kind, extract_artifact_sql
 from ..parsing.utils import sql_fingerprint, sql_is_compatible
 from .tokens import generate_case_prefix
 
@@ -57,7 +57,7 @@ class CaseService:
             self.session.scalars(
                 select(Case)
                 .options(
-                    selectinload(Case.artifacts).selectinload(Artifact.revisions),
+                    selectinload(Case.artifacts),
                     selectinload(Case.runs).selectinload(ObfuscationRun.responses),
                 )
                 .order_by(Case.updated_at.desc())
@@ -93,16 +93,16 @@ class CaseService:
         return case
 
     def _validate_sql(self, case: Case, text: str, kind: ArtifactKind) -> dict[str, object]:
-        parsed = parse_artifact(text, kind)
+        extracted_sql = extract_artifact_sql(text, kind)
         details: dict[str, object] = {
-            "kind": parsed.kind.value,
-            "finding_codes": [finding.code for finding in parsed.findings],
-            "extracted_sql_count": len(parsed.extracted_sql),
+            "kind": kind.value,
+            "finding_codes": [],
+            "extracted_sql_count": len(extracted_sql),
         }
-        if not parsed.extracted_sql:
+        if not extracted_sql:
             return details
 
-        primary_sql = parsed.extracted_sql[0]
+        primary_sql = extracted_sql[0]
         fingerprint, normalized = sql_fingerprint(primary_sql)
         details["sql_fingerprint"] = fingerprint
         if case.normalized_sql is None:
@@ -119,13 +119,15 @@ class CaseService:
         case_id: str,
         text: str,
         display_name: str = "",
+        *,
+        kind: ArtifactKind | None = None,
     ) -> ArtifactResult:
         case = self.get_case(case_id)
         if not text.strip():
             raise ValueError("Artifact text is empty")
         _ensure_artifact_size(text)
-        kind = detect_artifact_kind(text)
-        details = self._validate_sql(case, text, kind)
+        resolved_kind = kind if kind is not None else detect_artifact_kind(text)
+        details = self._validate_sql(case, text, resolved_kind)
         default_name = {
             ArtifactKind.SQL: "SQL",
             ArtifactKind.XPLAN: "DBMS_XPLAN",
@@ -133,10 +135,10 @@ class CaseService:
             ArtifactKind.OUTLINE: "Outline Data",
             ArtifactKind.PREDICATES: "Predicates",
             ArtifactKind.UNKNOWN: "Other material",
-        }[kind]
+        }[resolved_kind]
         artifact = Artifact(
             case=case,
-            detected_type=kind.value,
+            detected_type=resolved_kind.value,
             display_name=display_name.strip() or default_name,
         )
         self.session.add(artifact)
@@ -159,17 +161,22 @@ class CaseService:
     def add_artifacts(
         self,
         case_id: str,
-        materials: list[tuple[str, str]],
+        materials: list[tuple[str, str] | tuple[str, str, ArtifactKind]],
     ) -> tuple[ArtifactResult, ...]:
         if not materials:
             raise ValueError("No materials were provided")
         case = self.get_case(case_id)
         results: list[ArtifactResult] = []
-        for text, display_name in materials:
+        for item in materials:
+            if len(item) == 3:
+                text, display_name, pre_kind = item
+            else:
+                text, display_name = item
+                pre_kind = None
             if not text.strip():
                 raise ValueError("Artifact text is empty")
             _ensure_artifact_size(text)
-            kind = detect_artifact_kind(text)
+            kind = pre_kind if pre_kind is not None else detect_artifact_kind(text)
             details = self._validate_sql(case, text, kind)
             default_name = {
                 ArtifactKind.SQL: "SQL",

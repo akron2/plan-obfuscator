@@ -4,11 +4,11 @@ import re
 from dataclasses import dataclass
 
 from .detector import detect_artifact_kind
-from .monitor import parse_sql_monitor
+from .monitor import extract_sql_monitor_sql, parse_sql_monitor
 from .sql import parse_expression_fragment, parse_hint_fragment, parse_sql
 from .types import ArtifactKind, EntityType, ParsedArtifact, ParseFinding, TextOccurrence
 from .utils import make_occurrence
-from .xplan import parse_xplan
+from .xplan import extract_xplan_sql, parse_xplan
 
 
 def _parse_outline(text: str) -> ParsedArtifact:
@@ -23,12 +23,17 @@ def _parse_predicates(text: str) -> ParsedArtifact:
     parsed = ParsedArtifact(kind=ArtifactKind.PREDICATES, source_text=text)
     matches = list(re.finditer(r"(?im)^\s*\d+\s*-\s*(?:access|filter)\(", text))
     if matches:
+        cache: dict[str, list[TextOccurrence]] = {}
         for index, match in enumerate(matches):
             expression_start = match.end() - 1
             expression_end = matches[index + 1].start() if index + 1 < len(matches) else len(text)
             fragment = text[expression_start:expression_end]
-            for item in parse_expression_fragment(fragment, base_offset=expression_start):
-                parsed.add_occurrence(item)
+            cached = cache.get(fragment)
+            if cached is None:
+                cached = parse_expression_fragment(fragment, base_offset=0)
+                cache[fragment] = cached
+            for item in cached:
+                parsed.add_occurrence(_shift_occurrence(item, expression_start, text))
     else:
         for item in parse_expression_fragment(text):
             parsed.add_occurrence(item)
@@ -59,6 +64,17 @@ def _parse_unknown(text: str) -> ParsedArtifact:
     )
     parsed.finalize()
     return parsed
+
+
+def extract_artifact_sql(text: str, kind: ArtifactKind | str | None = None) -> list[str]:
+    resolved = ArtifactKind(kind) if kind else detect_artifact_kind(text)
+    if resolved == ArtifactKind.SQL:
+        return [text] if text.strip() else []
+    if resolved == ArtifactKind.XPLAN:
+        return extract_xplan_sql(text)
+    if resolved == ArtifactKind.SQL_MONITOR:
+        return extract_sql_monitor_sql(text)
+    return []
 
 
 def parse_artifact(text: str, kind: ArtifactKind | str | None = None) -> ParsedArtifact:
@@ -206,7 +222,11 @@ def _report_regions(source: str) -> list[_ReportRegion]:
     ]
 
 
-def split_materials(source: str) -> list[MaterialRegion]:
+def split_materials(
+    source: str,
+    *,
+    detected_kind: ArtifactKind | None = None,
+) -> list[MaterialRegion]:
     """Return independently storable Oracle materials found in one paste."""
 
     regions: list[MaterialRegion] = []
@@ -261,7 +281,7 @@ def split_materials(source: str) -> list[MaterialRegion]:
         )
 
     if not regions:
-        kind = detect_artifact_kind(source)
+        kind = detected_kind if detected_kind is not None else detect_artifact_kind(source)
         if kind != ArtifactKind.UNKNOWN:
             stripped = source.strip()
             start = len(source) - len(source.lstrip())

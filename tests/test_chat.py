@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import time
+
 import pytest
 
-from plan_obfuscator.services import CaseService, ChatService
+from plan_obfuscator.services import CaseService, ChatService, ObfuscationService
 from plan_obfuscator.services.chat import (
     NEW_CASE_TITLE,
     AmbiguousInputError,
@@ -122,4 +124,57 @@ def test_one_paste_adds_matching_monitor_and_xplan_as_separate_materials(db_sess
         "sql_monitor",
         "xplan",
     ]
+
+
+def test_large_500k_xplan_upload_obfuscate_and_restore_performance(db_session) -> None:
+    header = (
+        "SQL_ID  9babjv8yq8ru3, child number 0\n"
+        "-------------------------------------\n"
+        "SELECT /*+ GATHER_PLAN_STATISTICS */ e.employee_id, e.first_name, d.department_name\n"
+        "FROM hr.employees e JOIN hr.departments d ON e.department_id = d.department_id\n"
+        "WHERE e.salary > 5000 AND d.location_id = 1700\n\n"
+        "Plan hash value: 1234567890\n\n"
+        "---------------------------------------------------------------------------------\n"
+        "| Id  | Operation             | Name          | Starts | E-Rows | A-Rows |Cost |\n"
+        "---------------------------------------------------------------------------------\n"
+    )
+    row_tpl = (
+        "| {:3d} |  TABLE ACCESS BY INDEX| TBL_EMP_{:04d}  |      1 |     10 |     10 |   5 |\n"
+    )
+    pred_header = (
+        "---------------------------------------------------------------------------------\n\n"
+        "Predicate Information (identified by operation id):\n"
+        "---------------------------------------------------\n"
+    )
+    pred_tpl = (
+        '   {:d} - access("E_{:04d}"."DEPARTMENT_ID"="D_{:04d}"."DEPARTMENT_ID")\n'
+        '       filter(("E_{:04d}"."SALARY">5000 AND "D_{:04d}"."LOCATION_ID"=1700))\n'
+    )
+    rows = "".join(row_tpl.format(i % 999, i % 500) for i in range(1, 2400))
+    preds = "".join(
+        pred_tpl.format(i, i % 500, i % 500, i % 500, i % 500) for i in range(1, 2400)
+    )
+    plan_text = (header + rows + pred_header + preds).strip()
+    assert len(plan_text) >= 500_000
+
+    case = CaseService(db_session).create_case("Large 500k XPLAN")
+    chat = ChatService(db_session)
+
+    t0 = time.perf_counter()
+    upload = chat.submit(case.id, plan_text)
+    upload_seconds = time.perf_counter() - t0
+    assert upload.kind == SubmissionKind.MATERIAL
+    assert upload_seconds < 1.0
+
+    t1 = time.perf_counter()
+    question = chat.submit(case.id, "Что оптимизировать в этом плане?")
+    obfuscate_seconds = time.perf_counter() - t1
+    assert question.kind == SubmissionKind.QUESTION
+    assert question.run is not None
+    assert obfuscate_seconds < 5.0
+
+    run_artifact = question.run.run_artifacts[0]
+    assert "TBL_EMP_0001" not in run_artifact.obfuscated_text
+    restored = ObfuscationService(db_session).restore_run_artifact(run_artifact.id)
+    assert restored == plan_text
 

@@ -7,11 +7,12 @@ import sqlglot
 from .types import ArtifactKind
 
 SQL_START_RE = re.compile(
-    r"^\s*(?:(?:/\*[\s\S]*?\*/|--[^\r\n]*(?:\r?\n|$))\s*)*"
+    r"^\s*(?:(?:/\*[\s\S]*?\*/|--[^\r\n]*(?:\r?\n|$))\s*)*(?:\(\s*)*"
     r"(?:SELECT|WITH|INSERT|UPDATE|DELETE|MERGE|EXPLAIN|CREATE|ALTER|DROP|"
     r"TRUNCATE|GRANT|REVOKE|COMMENT|CALL|BEGIN|DECLARE)\b",
     re.IGNORECASE,
 )
+MAX_SQLGLOT_DETECT_CHARS = 16384
 
 
 def detect_artifact_kind(text: str) -> ArtifactKind:
@@ -31,7 +32,9 @@ def detect_artifact_kind(text: str) -> ArtifactKind:
     ):
         return ArtifactKind.XPLAN
 
-    if "BEGIN_OUTLINE_DATA" in text.upper() or re.search(r"(?im)^\s*Outline Data\s*$", text):
+    if re.search(r"(?i)BEGIN_OUTLINE_DATA", text) or re.search(
+        r"(?im)^\s*Outline Data\s*$", text
+    ):
         return ArtifactKind.OUTLINE
 
     if re.search(r"(?im)^\s*Predicate Information", text) or re.search(
@@ -42,10 +45,11 @@ def detect_artifact_kind(text: str) -> ArtifactKind:
     if SQL_START_RE.search(text):
         return ArtifactKind.SQL
 
-    try:
-        expressions = sqlglot.parse(text, read="oracle")
-        if any(expression is not None for expression in expressions):
-            return ArtifactKind.SQL
-    except Exception:
-        pass
+    if len(stripped) <= MAX_SQLGLOT_DETECT_CHARS:
+        try:
+            expressions = sqlglot.parse(text, read="oracle")
+            if any(expression is not None for expression in expressions):
+                return ArtifactKind.SQL
+        except Exception:
+            pass
     return ArtifactKind.UNKNOWN

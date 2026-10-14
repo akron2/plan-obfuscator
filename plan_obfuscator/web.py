@@ -285,9 +285,7 @@ def create_app(
             .options(
                 selectinload(Case.artifacts).selectinload(Artifact.revisions),
                 selectinload(Case.symbols),
-                selectinload(Case.runs)
-                .selectinload(ObfuscationRun.run_artifacts)
-                .selectinload(RunArtifact.replacements),
+                selectinload(Case.runs).selectinload(ObfuscationRun.run_artifacts),
                 selectinload(Case.runs).selectinload(ObfuscationRun.responses),
                 selectinload(Case.runs).selectinload(ObfuscationRun.findings),
             )

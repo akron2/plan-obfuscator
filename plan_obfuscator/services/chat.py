@@ -180,12 +180,16 @@ class ChatService:
             )
 
         if kind == SubmissionKind.MATERIAL:
-            regions = split_materials(source_text)
+            regions = split_materials(
+                source_text,
+                detected_kind=classification.artifact_kind,
+            )
             if len(regions) > 1:
-                materials = [
+                materials: list[tuple[str, str, ArtifactKind]] = [
                     (
                         region.text,
                         f"{display_name} · {index}" if display_name else "",
+                        region.kind,
                     )
                     for index, region in enumerate(regions, start=1)
                 ]
@@ -195,6 +199,7 @@ class ChatService:
                     case.id,
                     regions[0].text if regions else source_text,
                     display_name,
+                    kind=regions[0].kind if regions else classification.artifact_kind,
                 )
                 artifacts = (artifact,)
             return ChatSubmission(

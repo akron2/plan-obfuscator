@@ -179,17 +179,9 @@ class ParsedArtifact:
         )
         accepted: list[TextOccurrence] = []
         for candidate in candidates:
-            overlaps = [
-                item
-                for item in accepted
-                if candidate.start < item.end and item.start < candidate.end
-            ]
-            if not overlaps:
+            if not accepted or candidate.start >= accepted[-1].end:
                 accepted.append(candidate)
-                continue
+            elif candidate.priority > accepted[-1].priority:
+                accepted[-1] = candidate
 
-            if all(candidate.priority > item.priority for item in overlaps):
-                accepted = [item for item in accepted if item not in overlaps]
-                accepted.append(candidate)
-
-        self.occurrences = sorted(accepted, key=lambda item: (item.start, item.end))
+        self.occurrences = accepted

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from ..models import Case, Symbol
+from ..models import Case, Symbol, new_uuid
 from ..parsing.types import ENTITY_CODES, TextOccurrence
 
 TOKEN_SCHEME_VERSION = "1"
@@ -32,24 +32,32 @@ class SymbolRegistry:
     def __init__(self, session: Session, case: Case) -> None:
         self.session = session
         self.case = case
+        self._now = datetime.now(UTC)
         self._cache: dict[tuple[str, str], Symbol] = {
             (symbol.entity_type, symbol.canonical_value): symbol for symbol in case.symbols
         }
-        maximum = session.scalar(select(func.max(Symbol.sequence)).where(Symbol.case_id == case.id))
+        if case.symbols:
+            maximum = max(symbol.sequence for symbol in case.symbols)
+        else:
+            maximum = session.scalar(
+                select(func.max(Symbol.sequence)).where(Symbol.case_id == case.id)
+            )
         self._next_sequence = int(maximum or 0) + 1
 
     def get_or_create(self, occurrence: TextOccurrence) -> Symbol:
         key = (occurrence.entity_type.value, occurrence.canonical)
         symbol = self._cache.get(key)
         if symbol is not None:
-            symbol.last_used_at = datetime.now(UTC)
-            symbol.confidence = max(symbol.confidence, occurrence.confidence)
+            symbol.last_used_at = self._now
+            if occurrence.confidence > symbol.confidence:
+                symbol.confidence = occurrence.confidence
             return symbol
 
         type_code = ENTITY_CODES[occurrence.entity_type]
         sequence = self._next_sequence
         self._next_sequence += 1
         symbol = Symbol(
+            id=new_uuid(),
             case_id=self.case.id,
             entity_type=occurrence.entity_type.value,
             canonical_value=occurrence.canonical,
@@ -58,9 +66,10 @@ class SymbolRegistry:
             sequence=sequence,
             provenance=occurrence.provenance,
             confidence=occurrence.confidence,
+            created_at=self._now,
+            last_used_at=self._now,
         )
         self.session.add(symbol)
-        self.session.flush()
         self._cache[key] = symbol
-        self.case.symbols.append(symbol) if symbol not in self.case.symbols else None
+        self.case.symbols.append(symbol)
         return symbol

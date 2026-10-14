@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import insert, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..models import (
@@ -15,6 +15,7 @@ from ..models import (
     ReplacementOccurrence,
     RunArtifact,
     Symbol,
+    new_uuid,
     utc_now,
 )
 from ..parsing import ArtifactKind, EntityType, ParsedArtifact, TextOccurrence, parse_artifact
@@ -76,6 +77,8 @@ LEAK_CHECK_ALLOWLIST = {
     "COST",
 }
 
+WORD_TOKEN_RE = re.compile(r"[A-Za-z0-9_$#]+")
+
 
 @dataclass(slots=True, frozen=True)
 class AppliedReplacement:
@@ -123,14 +126,19 @@ def apply_replacements(
 
 
 def exact_restore(obfuscated: str, replacements: list[AppliedReplacement]) -> str:
-    restored = obfuscated
-    for item in reversed(replacements):
-        if restored[item.output_start : item.output_end] != item.symbol.marker:
+    ordered = sorted(replacements, key=lambda item: item.output_start)
+    parts: list[str] = []
+    cursor = 0
+    for item in ordered:
+        if item.output_start < cursor:
             raise ValueError("Obfuscated text no longer matches replacement manifest")
-        restored = (
-            restored[: item.output_start] + item.occurrence.original + restored[item.output_end :]
-        )
-    return restored
+        if obfuscated[item.output_start : item.output_end] != item.symbol.marker:
+            raise ValueError("Obfuscated text no longer matches replacement manifest")
+        parts.append(obfuscated[cursor : item.output_start])
+        parts.append(item.occurrence.original)
+        cursor = item.output_end
+    parts.append(obfuscated[cursor:])
+    return "".join(parts)
 
 
 def _reconcile_across_artifacts(parsed_items: list[ParsedArtifact]) -> None:
@@ -180,22 +188,34 @@ def _post_transform_findings(
             )
         )
 
+    word_positions: dict[str, tuple[int, int]] | None = None
     seen: set[tuple[str, str]] = set()
     for replacement in obfuscated.replacements:
         symbol = replacement.symbol
         original = symbol.preferred_original
-        key = (symbol.entity_type, original.upper())
+        upper = original.upper()
+        key = (symbol.entity_type, upper)
         if key in seen or symbol.entity_type not in LEAK_CHECK_TYPES:
             continue
         seen.add(key)
-        if len(original) < 3 or original.upper() in LEAK_CHECK_ALLOWLIST:
+        if len(original) < 3 or upper in LEAK_CHECK_ALLOWLIST:
             continue
-        pattern = re.compile(
-            rf"(?<![A-Za-z0-9_$#]){re.escape(original)}(?![A-Za-z0-9_$#])",
-            re.IGNORECASE,
-        )
-        match = pattern.search(obfuscated.text)
-        if match:
+        if WORD_TOKEN_RE.fullmatch(original):
+            if word_positions is None:
+                word_positions = {}
+                for word_match in WORD_TOKEN_RE.finditer(obfuscated.text):
+                    token_upper = word_match.group(0).upper()
+                    if token_upper not in word_positions:
+                        word_positions[token_upper] = (word_match.start(), word_match.end())
+            span = word_positions.get(upper)
+        else:
+            pattern = re.compile(
+                rf"(?<![A-Za-z0-9_$#]){re.escape(original)}(?![A-Za-z0-9_$#])",
+                re.IGNORECASE,
+            )
+            match = pattern.search(obfuscated.text)
+            span = (match.start(), match.end()) if match else None
+        if span is not None:
             findings.append(
                 ParseFinding(
                     severity="warning",
@@ -204,8 +224,8 @@ def _post_transform_findings(
                         f"A known {symbol.entity_type} value may remain outside parsed "
                         "occurrences. The output is safe to review before copying."
                     ),
-                    start=match.start(),
-                    end=match.end(),
+                    start=span[0],
+                    end=span[1],
                 )
             )
     return findings
@@ -296,8 +316,10 @@ class ObfuscationService:
         case.updated_at = utc_now()
         self.session.flush()
 
+        replacement_rows: list[dict[str, object]] = []
         for position, (artifact, revision, parsed, obfuscated) in enumerate(transformed):
             run_artifact = RunArtifact(
+                id=new_uuid(),
                 run_id=run.id,
                 artifact_revision_id=revision.id,
                 position=position,
@@ -306,20 +328,20 @@ class ObfuscationService:
                 obfuscated_text=obfuscated.text,
             )
             self.session.add(run_artifact)
-            self.session.flush()
             for item in obfuscated.replacements:
-                self.session.add(
-                    ReplacementOccurrence(
-                        run_artifact_id=run_artifact.id,
-                        symbol_id=item.symbol.id,
-                        source_start=item.occurrence.start,
-                        source_end=item.occurrence.end,
-                        output_start=item.output_start,
-                        output_end=item.output_end,
-                        original_lexeme=item.occurrence.original,
-                        marker=item.symbol.marker,
-                        quoting_context=item.occurrence.quoting_context,
-                    )
+                replacement_rows.append(
+                    {
+                        "id": new_uuid(),
+                        "run_artifact_id": run_artifact.id,
+                        "symbol_id": item.symbol.id,
+                        "source_start": item.occurrence.start,
+                        "source_end": item.occurrence.end,
+                        "output_start": item.output_start,
+                        "output_end": item.output_end,
+                        "original_lexeme": item.occurrence.original,
+                        "marker": item.symbol.marker,
+                        "quoting_context": item.occurrence.quoting_context,
+                    }
                 )
             for parse_finding in parsed.findings:
                 self.session.add(
@@ -334,15 +356,21 @@ class ObfuscationService:
                     )
                 )
 
+        self.session.flush()
+        if replacement_rows:
+            self.session.execute(insert(ReplacementOccurrence), replacement_rows)
         self.session.commit()
-        return self.get_run(run.id)
+        return self.get_run(run.id, include_replacements=False)
 
-    def get_run(self, run_id: str) -> ObfuscationRun:
+    def get_run(self, run_id: str, *, include_replacements: bool = True) -> ObfuscationRun:
+        run_artifacts_loader = selectinload(ObfuscationRun.run_artifacts)
+        if include_replacements:
+            run_artifacts_loader = run_artifacts_loader.selectinload(RunArtifact.replacements)
         run = self.session.scalar(
             select(ObfuscationRun)
             .where(ObfuscationRun.id == run_id)
             .options(
-                selectinload(ObfuscationRun.run_artifacts).selectinload(RunArtifact.replacements),
+                run_artifacts_loader,
                 selectinload(ObfuscationRun.responses),
                 selectinload(ObfuscationRun.findings),
                 selectinload(ObfuscationRun.case).selectinload(Case.symbols),
@@ -363,15 +391,20 @@ class ObfuscationService:
         )
         if run_artifact is None:
             raise LookupError(run_artifact_id)
-        restored = run_artifact.obfuscated_text
-        for item in sorted(
+        obfuscated = run_artifact.obfuscated_text
+        ordered = sorted(
             run_artifact.replacements,
             key=lambda replacement: replacement.output_start,
-            reverse=True,
-        ):
-            if restored[item.output_start : item.output_end].upper() != item.marker.upper():
+        )
+        parts: list[str] = []
+        cursor = 0
+        for item in ordered:
+            if item.output_start < cursor:
                 raise ValueError("Stored obfuscated text does not match its manifest")
-            restored = (
-                restored[: item.output_start] + item.original_lexeme + restored[item.output_end :]
-            )
-        return restored
+            if obfuscated[item.output_start : item.output_end].upper() != item.marker.upper():
+                raise ValueError("Stored obfuscated text does not match its manifest")
+            parts.append(obfuscated[cursor : item.output_start])
+            parts.append(item.original_lexeme)
+            cursor = item.output_end
+        parts.append(obfuscated[cursor:])
+        return "".join(parts)

@@ -389,6 +389,11 @@ def _hint_occurrences(sql: str, start: int, end: int) -> list[TextOccurrence]:
     return result
 
 
+ORACLE_DIALECT = Dialect.get_or_raise("oracle")
+UNQUOTED_UPPER_IDENT_RE = re.compile(r"[A-Z][A-Z0-9_$#]*")
+QUERY_BLOCK_RE = re.compile(r"(?:SEL|SET|INS|UPD|DEL)\$[A-Z0-9_]+")
+
+
 def _ranges_overlap(start: int, end: int, occurrences: Iterable[TextOccurrence]) -> bool:
     return any(start < item.end and item.start < end for item in occurrences)
 
@@ -396,14 +401,26 @@ def _ranges_overlap(start: int, end: int, occurrences: Iterable[TextOccurrence])
 def _fallback_tokens(sql: str, existing: list[TextOccurrence]) -> list[TextOccurrence]:
     result: list[TextOccurrence] = []
     try:
-        tokens = Dialect.get_or_raise("oracle").tokenize(sql)
+        tokens = ORACLE_DIALECT.tokenize(sql)
     except Exception:
         tokens = []
 
+    merged_existing: list[tuple[int, int]] = []
+    for item in sorted(existing, key=lambda occ: (occ.start, occ.end)):
+        if not merged_existing or item.start >= merged_existing[-1][1]:
+            merged_existing.append((item.start, item.end))
+        elif item.end > merged_existing[-1][1]:
+            merged_existing[-1] = (merged_existing[-1][0], item.end)
+
+    cursor = 0
     for index, token in enumerate(tokens):
         start = token.start
         end = token.end + 1
-        if _ranges_overlap(start, end, [*existing, *result]):
+        while cursor < len(merged_existing) and merged_existing[cursor][1] <= start:
+            cursor += 1
+        if (cursor < len(merged_existing) and merged_existing[cursor][0] < end) or (
+            result and start < result[-1].end
+        ):
             continue
         previous = tokens[index - 1] if index else None
         following = tokens[index + 1] if index + 1 < len(tokens) else None
@@ -757,7 +774,7 @@ def parse_expression_fragment(
 
     result: list[TextOccurrence] = []
     try:
-        tokens: list[Token] = Dialect.get_or_raise("oracle").tokenize(text)
+        tokens: list[Token] = ORACLE_DIALECT.tokenize(text)
     except Exception:
         tokens = []
 
@@ -781,8 +798,9 @@ def parse_expression_fragment(
                 entity_type = EntityType.ALIAS
             else:
                 entity_type = EntityType.COLUMN
-            semantic_quoted = token.text != token.text.upper() or not re.fullmatch(
-                r"[A-Z][A-Z0-9_$#]*", token.text
+            semantic_quoted = (
+                token.text != token.text.upper()
+                or not UNQUOTED_UPPER_IDENT_RE.fullmatch(token.text)
             )
             occurrence = make_occurrence(
                 text,
@@ -838,7 +856,7 @@ def parse_expression_fragment(
                     "oracle_expression",
                     quoting_context="bind",
                 )
-            elif re.fullmatch(r"(?:SEL|SET|INS|UPD|DEL)\$[A-Z0-9_]+", upper):
+            elif QUERY_BLOCK_RE.fullmatch(upper):
                 occurrence = make_occurrence(
                     text,
                     start,

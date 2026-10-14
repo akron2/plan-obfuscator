@@ -115,6 +115,16 @@ def _sections(text: str) -> list[tuple[str, int, int, str]]:
     return result
 
 
+def extract_sql_monitor_sql(text: str) -> list[str]:
+    extracted: list[str] = []
+    for name, start, end, _heading in _sections(text):
+        if name.lower() == "sql text":
+            stripped = text[start:end].strip()
+            if stripped:
+                extracted.append(stripped)
+    return extracted
+
+
 def _sql_text(parsed: ParsedArtifact, start: int, end: int) -> None:
     region = parsed.source_text[start:end]
     stripped = region.strip()

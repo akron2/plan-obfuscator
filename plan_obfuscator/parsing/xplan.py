@@ -254,28 +254,31 @@ def _query_block_section(parsed: ParsedArtifact, start: int, end: int) -> None:
             parsed.add_occurrence(occurrence)
 
 
+PREDICATE_PREFIX_RE = re.compile(r"(?im)^\s*\d+\s*-\s*(?:access|filter)\(")
+
+
 def _predicate_section(parsed: ParsedArtifact, start: int, end: int) -> None:
     fragment = parsed.source_text[start:end]
     # Operation ids occur only before " - access/filter(". Exclude those prefixes
     # from numeric-literal handling while parsing the expressions themselves.
-    cursor = 0
-    expression_start = 0
-    for match in re.finditer(r"(?im)^\s*\d+\s*-\s*(?:access|filter)\(", fragment):
-        if expression_start < match.start():
-            expression_start = match.start()
-        prefix_end = match.end() - 1
-        next_match = re.search(r"(?im)^\s*\d+\s*-\s*(?:access|filter)\(", fragment[prefix_end:])
-        expression_end = prefix_end + next_match.start() if next_match else len(fragment)
-        expression = fragment[prefix_end:expression_end]
-        for item in parse_expression_fragment(expression, base_offset=start + prefix_end):
-            parsed.add_occurrence(item)
-        cursor = expression_end
-        expression_start = expression_end
-        if not next_match:
-            break
-    if cursor == 0:
+    matches = list(PREDICATE_PREFIX_RE.finditer(fragment))
+    if not matches:
         for item in parse_expression_fragment(fragment, base_offset=start):
             parsed.add_occurrence(item)
+        return
+
+    cache: dict[str, list[TextOccurrence]] = {}
+    for index, match in enumerate(matches):
+        prefix_end = match.end() - 1
+        expression_end = matches[index + 1].start() if index + 1 < len(matches) else len(fragment)
+        expression = fragment[prefix_end:expression_end]
+        cached = cache.get(expression)
+        if cached is None:
+            cached = parse_expression_fragment(expression, base_offset=0)
+            cache[expression] = cached
+        base = start + prefix_end
+        for item in cached:
+            parsed.add_occurrence(_shift(item, base, parsed.source_text))
 
 
 def _projection_section(parsed: ParsedArtifact, start: int, end: int) -> None:
@@ -397,15 +400,41 @@ def _notes(parsed: ParsedArtifact, start: int, end: int) -> None:
             parsed.add_occurrence(occurrence)
 
 
+SQL_HEADER_PATTERN = re.compile(
+    r"(?ims)^\s*SQL_ID\s+(?P<sqlid>[a-z0-9]+)\s*,\s*child number\s+"
+    r"(?P<child>\d+)\s*\r?\n[-]+\s*\r?\n(?P<sql>.*?)"
+    r"(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|\Z)"
+)
+
+EXPLAINED_SQL_PATTERN = re.compile(
+    r"(?ims)^\s*(?:EXPLAINED SQL STATEMENT|SQL STATEMENT)\s*:\s*\r?\n"
+    r"[-]+\s*\r?\n(?P<sql>.*?)"
+    r"(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|\Z)"
+)
+
+
+def extract_xplan_sql(text: str) -> list[str]:
+    extracted: list[str] = []
+    for sql_header in SQL_HEADER_PATTERN.finditer(text):
+        sql_text = text[sql_header.start("sql") : sql_header.end("sql")].strip()
+        if sql_text:
+            extracted.append(sql_text)
+    for explained_sql in EXPLAINED_SQL_PATTERN.finditer(text):
+        sql_text = text[explained_sql.start("sql") : explained_sql.end("sql")].strip()
+        if sql_text:
+            extracted.append(sql_text)
+    for name, start, end in _section_ranges(text):
+        if name == "Remote SQL Information":
+            sql_text = text[start:end].strip()
+            if sql_text:
+                extracted.append(sql_text)
+    return extracted
+
+
 def parse_xplan(text: str) -> ParsedArtifact:
     parsed = ParsedArtifact(kind=ArtifactKind.XPLAN, source_text=text)
 
-    sql_header_pattern = re.compile(
-        r"(?ims)^\s*SQL_ID\s+(?P<sqlid>[a-z0-9]+)\s*,\s*child number\s+"
-        r"(?P<child>\d+)\s*\r?\n[-]+\s*\r?\n(?P<sql>.*?)"
-        r"(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|\Z)"
-    )
-    for sql_header in sql_header_pattern.finditer(text):
+    for sql_header in SQL_HEADER_PATTERN.finditer(text):
         for group, entity_type in (
             ("sqlid", EntityType.SQL_ID),
             ("child", EntityType.EXECUTION_ID),
@@ -421,12 +450,7 @@ def parse_xplan(text: str) -> ParsedArtifact:
                 parsed.add_occurrence(occurrence)
         _add_sql_region(parsed, sql_header.start("sql"), sql_header.end("sql"))
 
-    explained_sql_pattern = re.compile(
-        r"(?ims)^\s*(?:EXPLAINED SQL STATEMENT|SQL STATEMENT)\s*:\s*\r?\n"
-        r"[-]+\s*\r?\n(?P<sql>.*?)"
-        r"(?=\r?\n\s*\r?\n\s*Plan hash value\s*:|\Z)"
-    )
-    for explained_sql in explained_sql_pattern.finditer(text):
+    for explained_sql in EXPLAINED_SQL_PATTERN.finditer(text):
         _add_sql_region(parsed, explained_sql.start("sql"), explained_sql.end("sql"))
 
     for match in re.finditer(r"(?i)(?:Plan hash value\s*[:=]\s*)(\d+)", text):
