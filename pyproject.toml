@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plan-obfuscator"
-version = "0.3.0"
+version = "0.4.0"
 description = "Local reversible obfuscation for Oracle execution plans and SQL Monitor reports"
 readme = "README.md"
 requires-python = ">=3.11"
